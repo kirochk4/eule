@@ -1,0 +1,12 @@
+{
+  let foo = "closure"
+  let f() {
+    {
+      print(foo) # out: closure
+      let foo = "shadow"
+      print(foo) # out: shadow
+    }
+    print(foo) # out: closure
+  }
+  f()
+}

@@ -1,0 +1,13 @@
+let a = "global"
+
+{
+  let assign() {
+    a = "assigned"
+  }
+
+  let a = "inner"
+  assign()
+  print(a) # out: inner
+}
+
+print(a) # out: assigned

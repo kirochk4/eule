@@ -11,7 +11,7 @@ type compiler struct {
 	*tokenReader
 	fn *Function
 	fnType
-	locals []localVariable
+	locals []localVar
 	*loop
 	enclosing *compiler
 	scope     int
@@ -23,7 +23,6 @@ func newCompiler(source []byte) *compiler {
 		tokenReader: newTokenReader(source),
 		fn:          NewFunction("@"),
 		fnType:      fnTypeScript,
-		locals:      []localVariable{},
 		loop:        nil,
 		enclosing:   nil,
 		scope:       0,
@@ -35,7 +34,6 @@ func (c *compiler) newFunctionCompiler(t fnType, name string) *compiler {
 		tokenReader: c.tokenReader,
 		fn:          NewFunction(name),
 		fnType:      t,
-		locals:      []localVariable{},
 		loop:        nil,
 		enclosing:   c,
 		scope:       1,
@@ -456,6 +454,10 @@ func (c *compiler) namedVariable(name string, canAssign bool) {
 		index = idx
 		getOp = opLoadLocal
 		setOp = opStoreLocal
+	} else if idx, ok := c.resolveUpval(name); ok {
+		index = idx
+		getOp = opLoadUpvalue
+		setOp = opStoreUpvalue
 	} else {
 		index = int(c.makeConstant(String(name)))
 		getOp = opLoadGlobal
@@ -476,6 +478,18 @@ func (c *compiler) resolveLocal(name string) (int, bool) {
 		if local.name == name && local.isInitialized {
 			return i, true
 		}
+	}
+	return 0, false
+}
+
+func (c *compiler) resolveUpval(name string) (int, bool) {
+	if c.enclosing == nil {
+		return 0, false
+	} else if local, ok := c.enclosing.resolveLocal(name); ok {
+		c.enclosing.locals[local].isCaptured = true
+		return c.addUpval(local, true), true
+	} else if upval, ok := c.enclosing.resolveUpval(name); ok {
+		return c.addUpval(upval, false), true
 	}
 	return 0, false
 }
@@ -565,6 +579,9 @@ func (c *compiler) function(name string) bool {
 	}
 
 	c.emitConstant(fc.fn)
+	if len(fc.fn.upvals) != 0 {
+		c.emit(opClosure)
+	}
 	return isArrow
 }
 
@@ -831,7 +848,23 @@ func (c *compiler) addLocal(name string) {
 	if len(c.locals) == uint8Count {
 		c.errorAtPrevious("variables overflow (256)")
 	}
-	c.locals = append(c.locals, localVariable{name, c.scope, false})
+	c.locals = append(c.locals, localVar{name, c.scope, false, false})
+}
+
+func (c *compiler) addUpval(index int, isLocal bool) int {
+	for i := len(c.fn.upvals) - 1; i >= 0; i-- {
+		if c.fn.upvals[i].index == uint8(index) &&
+			c.fn.upvals[i].isLocal == isLocal {
+			return i
+		}
+	}
+
+	if len(c.fn.upvals) == uint8Count {
+		c.errorAtPrevious("upvalues overflow (256)")
+	}
+
+	c.fn.upvals = append(c.fn.upvals, compUpval{isLocal, uint8(index)})
+	return len(c.fn.upvals) - 1
 }
 
 func (c *compiler) markInitialized() {
@@ -915,7 +948,12 @@ func (c *compiler) endScope() {
 	c.scope--
 
 	for len(c.locals) > 0 && c.locals[len(c.locals)-1].depth > c.scope {
-		c.emit(opPop)
+		local := c.locals[len(c.locals)-1]
+		if local.isCaptured {
+			c.emit(opCloseUpvalue)
+		} else {
+			c.emit(opPop)
+		}
 		c.locals = c.locals[:len(c.locals)-1]
 	}
 }
@@ -955,8 +993,8 @@ func (c *compiler) argumentList() uint8 {
 func (c *compiler) parameterList() {
 	if !c.check(tokenRightParen) {
 		for {
-			c.fn.Arity++
-			if c.fn.Arity > 255 {
+			c.fn.paramCount++
+			if c.fn.paramCount > 255 {
 				c.errorAtCurrent("parameters overflow (255)")
 			}
 			parameterIndex := c.declareVariable()
@@ -1163,12 +1201,18 @@ var safeTokens = map[tokenType]empty{
 
 /* == additional ============================================================ */
 
+type compUpval struct {
+	isLocal bool
+	index   uint8
+}
+
 type parseFn func(canAssign bool)
 
-type localVariable struct {
+type localVar struct {
 	name          string
 	depth         int
 	isInitialized bool
+	isCaptured    bool
 }
 
 type loopType int

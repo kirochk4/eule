@@ -1,0 +1,7 @@
+{
+  let local = "local"
+  let f() {
+    print(local) # out: local
+  }
+  f()
+}

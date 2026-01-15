@@ -24,11 +24,16 @@ const (
 	opStoreLocal
 	opLoadLocal
 
+	opCloseUpvalue
+	opStoreUpvalue
+	opLoadUpvalue
+
 	opDefineKey
 	opStoreKey
 	opLoadKey
 	opLoadKeyNoPop
 
+	opClosure
 	opTable
 
 	opAdd
@@ -81,12 +86,13 @@ func printInstruction(f *Function, offset int) int {
 	case opPop, opDup, opSwap, opNihil, opFalse, opTrue, opTable, opAdd, opSub,
 		opMul, opDiv, opEq, opLt, opLe, opNot, opNeg, opPos, opTypeOf, opReturn,
 		opStoreTemp, opLoadTemp, opDefineKey, opStoreKey, opLoadKey,
-		opLoadKeyNoPop:
+		opLoadKeyNoPop, opCloseUpvalue, opClosure:
 		return simpleInstruction(f, offset)
 	case opConstant, opDefineGlobal, opStoreGlobal,
 		opLoadGlobal:
 		return constantInstruction(f, offset)
-	case opSmallInteger, opCall, opStoreLocal, opLoadLocal:
+	case opSmallInteger, opCall, opStoreLocal, opLoadLocal, opLoadUpvalue,
+		opStoreUpvalue:
 		return byteInstruction(f, offset)
 	case opJump, opJumpIfFalse, opJumpBack:
 		sign := 1
@@ -154,11 +160,16 @@ var opNames = [...]string{
 	opStoreLocal: "store_local",
 	opLoadLocal:  "load_local",
 
+	opCloseUpvalue: "close_upvalue",
+	opStoreUpvalue: "store_upvalue",
+	opLoadUpvalue:  "load_upvalue",
+
 	opDefineKey: "define_key",
 	opStoreKey:  "store_key",
 	opLoadKey:   "load_key",
 
-	opTable: "table",
+	opClosure: "closure",
+	opTable:   "table",
 
 	opAdd:    "add",
 	opSub:    "sub",

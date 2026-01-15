@@ -1,0 +1,13 @@
+let f
+
+let foo = {
+  .method(self, param) {
+    let f_() {
+      print(param)
+    }
+    f = f_
+  },
+}
+
+foo->method("param")
+f() # out: param

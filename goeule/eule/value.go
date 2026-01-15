@@ -54,11 +54,12 @@ func newTable(cap int, meta *Table) *Table {
 }
 
 type Function struct {
-	Code      []uint8
-	Constants []Value
-	Lines     []int
-	Arity     int
-	Name      string
+	Name       string
+	Code       []uint8
+	Constants  []Value
+	Lines      []int
+	upvals     []compUpval
+	paramCount int
 }
 
 func (f *Function) addConstant(constant Value) int {
@@ -85,6 +86,34 @@ func NewFunction(name string) *Function {
 
 type Native func(vm *VM, values []Value) Value
 
+type Closure struct {
+	fn     *Function
+	upvals []*Upvalue
+}
+
+type Upvalue struct {
+	loc  int
+	ref  *[stackMax]Value
+	clsd Value
+	next *Upvalue
+}
+
+func (u *Upvalue) Store(v Value) {
+	if u.loc != -1 {
+		(*u.ref)[u.loc] = v
+	} else {
+		u.clsd = v
+	}
+}
+
+func (u *Upvalue) Load() Value {
+	if u.loc != -1 {
+		return (*u.ref)[u.loc]
+	} else {
+		return u.clsd
+	}
+}
+
 func nativePrint(vm *VM, values []Value) Value {
 	for i, value := range values {
 		fmt.Printf("%v", value)
@@ -106,6 +135,7 @@ func (v Number) String() string    { return formatNumber(v) }
 func (v String) String() string    { return string(v) }
 func (v *Table) String() string    { return "<table>" /* formatTable(v) */ }
 func (v *Function) String() string { return fmt.Sprintf("<fn %s>", v.Name) }
+func (v *Closure) String() string  { return v.fn.String() }
 func (v Native) String() string    { return "<native fn>" }
 
 func (v Nihil) toString() String     { return String(v.String()) }
@@ -114,6 +144,7 @@ func (v Number) toString() String    { return String(v.String()) }
 func (v String) toString() String    { return String(v.String()) }
 func (v *Table) toString() String    { return "<table>" }
 func (v *Function) toString() String { return String(v.String()) }
+func (v *Closure) toString() String  { return String(v.String()) }
 func (v Native) toString() String    { return String(v.String()) }
 
 func (v Nihil) toBoolean() Boolean     { return false }
@@ -122,6 +153,7 @@ func (v Number) toBoolean() Boolean    { return true }
 func (v String) toBoolean() Boolean    { return true }
 func (v *Table) toBoolean() Boolean    { return true }
 func (v *Function) toBoolean() Boolean { return true }
+func (v *Closure) toBoolean() Boolean  { return true }
 func (v Native) toBoolean() Boolean    { return true }
 
 func isNihil(v Value) bool {

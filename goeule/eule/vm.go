@@ -11,7 +11,7 @@ const (
 	framesMax int = 64
 	stackMax      = framesMax * uint8Count
 
-	globalTableInitCapacity = 8
+	globalInitCapacity = 8
 )
 
 var (
@@ -23,6 +23,7 @@ type callFrame struct {
 	fn     *Function
 	cursor int
 	slots  int
+	upvals []*Upvalue
 }
 
 func (f *callFrame) readByte() uint8 {
@@ -45,18 +46,19 @@ func (f *callFrame) readString() String {
 }
 
 type VM struct {
-	callStack [framesMax]callFrame
-	cst       int
-	stack     [stackMax]Value
-	st        int
-	Global    *Table
+	callStack  [framesMax]callFrame
+	cst        int
+	stack      [stackMax]Value
+	st         int
+	Global     *Table
+	openUpvals *Upvalue
 }
 
 func New() *VM {
 	vm := &VM{
 		callStack: [framesMax]callFrame{},
 		stack:     [stackMax]Value{},
-		Global:    newTable(globalTableInitCapacity, nil),
+		Global:    newTable(globalInitCapacity, nil),
 	}
 	vm.Global.Store(String("print"), Native(nativePrint))
 	vm.Global.Store(String("clock"), Native(nativeClock))
@@ -112,6 +114,31 @@ func (vm *VM) run() error {
 			vm.push(frame.readConstant())
 		case opTable:
 			vm.push(newTable(0, nil))
+		case opClosure:
+			fn := vm.pop().(*Function)
+			cls := &Closure{fn, nil}
+			vm.push(cls)
+			for _, upval := range fn.upvals {
+				if upval.isLocal {
+					cls.upvals = append(
+						cls.upvals,
+						vm.captureUpvalue(frame.slots+int(upval.index)),
+					)
+				} else {
+					cls.upvals = append(cls.upvals, frame.upvals[upval.index])
+				}
+			}
+		case opCloseUpvalue:
+			vm.closeUpvalues(vm.st-1)
+			vm.pop()
+		case opStoreUpvalue:
+			index := int(frame.readByte())
+			upval := frame.upvals[index]
+			upval.Store(vm.pop())
+		case opLoadUpvalue:
+			index := int(frame.readByte())
+			upval := frame.upvals[index]
+			vm.push(upval.Load())
 		case opStoreTemp:
 			vm.stack[frame.slots-1] = vm.peek(0)
 		case opLoadTemp:
@@ -247,6 +274,7 @@ func (vm *VM) run() error {
 
 		case opReturn:
 			result := vm.pop()
+			vm.closeUpvalues(frame.slots)
 			vm.st = frame.slots - 1
 			vm.push(result)
 			vm.cst--
@@ -258,8 +286,41 @@ func (vm *VM) run() error {
 	}
 }
 
+func (vm *VM) captureUpvalue(loc int) *Upvalue {
+	var prev *Upvalue = nil
+	upval := vm.openUpvals
+
+	for upval != nil && upval.loc > loc {
+		prev = upval
+		upval = upval.next
+	}
+
+	if upval != nil && upval.loc == loc {
+		return upval
+	}
+
+	new := &Upvalue{loc, &vm.stack, nil, upval}
+	if prev != nil {
+		prev.next = new
+	} else {
+		vm.openUpvals = new
+	}
+	return new
+}
+
+func (vm *VM) closeUpvalues(locOfLast int) {
+	for vm.openUpvals != nil && vm.openUpvals.loc >= locOfLast {
+		upval := vm.openUpvals
+		upval.clsd = upval.Load()
+		upval.loc = -1
+		vm.openUpvals = upval.next
+	}
+}
+
 func (vm *VM) callValue(value Value, argCount int) error {
 	switch callee := value.(type) {
+	case *Closure:
+		return vm.callClosure(callee, argCount)
 	case *Function:
 		return vm.callFunction(callee, argCount)
 	case Native:
@@ -271,18 +332,32 @@ func (vm *VM) callValue(value Value, argCount int) error {
 	}
 }
 
-func (vm *VM) callFunction(fn *Function, argCount int) error {
-	if argCount < fn.Arity {
-		for range fn.Arity - argCount {
+func (vm *VM) balanceArguments(argCount, paramCount int) {
+	if argCount < paramCount {
+		for range paramCount - argCount {
 			vm.push(Nihil{})
 		}
-	} else if argCount > fn.Arity {
-		vm.st -= argCount - fn.Arity
+	} else if argCount > paramCount {
+		vm.st -= argCount - paramCount
 	}
+}
+
+func (vm *VM) callClosure(cls *Closure, argCount int) error {
+	vm.balanceArguments(argCount, cls.fn.paramCount)
 	if vm.cst == framesMax {
 		return vm.runtimeError("stack overflow")
 	}
-	vm.callStack[vm.cst] = callFrame{fn, 0, vm.st - argCount}
+	vm.callStack[vm.cst] = callFrame{cls.fn, 0, vm.st - argCount, cls.upvals}
+	vm.cst++
+	return nil
+}
+
+func (vm *VM) callFunction(fn *Function, argCount int) error {
+	vm.balanceArguments(argCount, fn.paramCount)
+	if vm.cst == framesMax {
+		return vm.runtimeError("stack overflow")
+	}
+	vm.callStack[vm.cst] = callFrame{fn, 0, vm.st - argCount, nil}
 	vm.cst++
 	return nil
 }

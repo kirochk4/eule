@@ -1,4 +1,4 @@
-let a = "before";
-let c = a = "let";
-print(a); # out: let
-print(c); # out: let
+let a = "before"
+let c = a = "after"
+print(a) # out: after
+print(c) # out: after

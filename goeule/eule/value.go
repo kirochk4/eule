@@ -77,6 +77,9 @@ func (f *Function) writeCode(code uint8, line int) {
 }
 
 func NewFunction(name string) *Function {
+	if name == "" {
+		name = "_"
+	}
 	return &Function{Name: name}
 }
 

@@ -16,6 +16,10 @@ const (
 )
 
 const (
+	modeAutoSemicolons = true
+)
+
+const (
 	uint8Max  uint8  = math.MaxUint8
 	uint16Max uint16 = math.MaxUint16
 

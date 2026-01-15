@@ -77,7 +77,7 @@ func printInstruction(f *Function, offset int) int {
 		fmt.Printf("%4d ", f.Lines[offset])
 	}
 
-	switch instruction := f.Code[offset]; instruction {
+	switch op := f.Code[offset]; op {
 	case opPop, opDup, opSwap, opNihil, opFalse, opTrue, opTable, opAdd, opSub,
 		opMul, opDiv, opEq, opLt, opLe, opNot, opNeg, opPos, opTypeOf, opReturn,
 		opStoreTemp, opLoadTemp, opDefineKey, opStoreKey, opLoadKey,
@@ -90,7 +90,7 @@ func printInstruction(f *Function, offset int) int {
 		return byteInstruction(f, offset)
 	case opJump, opJumpIfFalse, opJumpBack:
 		sign := 1
-		if instruction == opJumpBack {
+		if op == opJumpBack {
 			sign = -1
 		}
 		return jumpInstruction(f, offset, sign)

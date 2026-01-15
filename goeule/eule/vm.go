@@ -92,7 +92,7 @@ func (vm *VM) run() error {
 			fmt.Println()
 		}
 
-		switch instr := frame.readByte(); instr {
+		switch op := frame.readByte(); op {
 		case opPop:
 			vm.pop()
 		case opDup:
@@ -127,7 +127,10 @@ func (vm *VM) run() error {
 			object := vm.pop()
 			table, ok := object.(*Table)
 			if !ok {
-				return vm.runtimeError("Only arrays and maps have indexes.")
+				return vm.runtimeError(
+					"attempt to store key in %s",
+					typeOf(object),
+				)
 			}
 			vm.push(table.Store(key, value))
 		case opLoadKey:
@@ -135,7 +138,10 @@ func (vm *VM) run() error {
 			object := vm.pop()
 			table, ok := object.(*Table)
 			if !ok {
-				return vm.runtimeError("Only arrays and maps have indexes.")
+				return vm.runtimeError(
+					"attempt to load key from %s",
+					typeOf(object),
+				)
 			}
 			vm.push(table.Load(key))
 		case opLoadKeyNoPop:
@@ -143,7 +149,10 @@ func (vm *VM) run() error {
 			object := vm.peek(1)
 			table, ok := object.(*Table)
 			if !ok {
-				return vm.runtimeError("Only arrays and maps have indexes.")
+				return vm.runtimeError(
+					"attempt to load key from %s",
+					typeOf(object),
+				)
 			}
 			vm.push(table.Load(key))
 		case opStoreLocal:
@@ -158,13 +167,13 @@ func (vm *VM) run() error {
 		case opStoreGlobal:
 			name := frame.readString()
 			if _, ok := vm.Global.Pairs[name]; !ok {
-				return vm.runtimeError("Undefined variable '%s'.", name)
+				return vm.runtimeError("variable '%s' is undefined", name)
 			}
 			vm.Global.Pairs[name] = vm.peek(0)
 		case opLoadGlobal:
 			name := frame.readString()
 			if value, ok := vm.Global.Pairs[name]; !ok {
-				return vm.runtimeError("Undefined variable '%s'.", name)
+				return vm.runtimeError("variable '%s' is undefined", name)
 			} else {
 				vm.push(value)
 			}
@@ -181,30 +190,39 @@ func (vm *VM) run() error {
 				vm.push(num1 + num2)
 			} else {
 				return vm.runtimeError(
-					"Operands must be two numbers or two strings.",
+					"attempt to add %s and %s", typeOf(v1), typeOf(v2),
 				)
 			}
 		case opLt, opLe, opSub, opMul, opDiv:
 			v2 := vm.pop()
 			v1 := vm.pop()
 			if num1, num2, ok := assertValues[Number](v1, v2); ok {
-				vm.push(numOps[instr](num1, num2))
+				vm.push(numOps[op](num1, num2))
 			} else {
-				return vm.runtimeError("Operands must be numbers.")
+				return vm.runtimeError(
+					"attempt to %s %s and %s",
+					opNames[op], typeOf(v1), typeOf(v2),
+				)
 			}
 		case opNot:
 			vm.push(!vm.pop().toBoolean())
 		case opNeg:
 			v, isNumber := vm.peek(0).(Number)
 			if !isNumber {
-				return vm.runtimeError("Operand must be a number.")
+				return vm.runtimeError(
+					"attempt to %s %s",
+					opNames[op], typeOf(v),
+				)
 			}
 			vm.pop()
 			vm.push(-v)
 		case opPos:
 			v, isNumber := vm.peek(0).(Number)
 			if !isNumber {
-				return vm.runtimeError("Operand must be a number.")
+				return vm.runtimeError(
+					"attempt to %s %s",
+					opNames[op], typeOf(v),
+				)
 			}
 			vm.pop()
 			vm.push(Number(math.Abs(float64(v))))
@@ -247,7 +265,9 @@ func (vm *VM) callValue(value Value, argCount int) error {
 	case Native:
 		return vm.callNative(callee, argCount)
 	default:
-		return vm.runtimeError("Can only call functions.")
+		return vm.runtimeError(
+			"%s is not callable", value,
+		)
 	}
 }
 
@@ -260,7 +280,7 @@ func (vm *VM) callFunction(fn *Function, argCount int) error {
 		vm.st -= argCount - fn.Arity
 	}
 	if vm.cst == framesMax {
-		return vm.runtimeError("Stack overflow.")
+		return vm.runtimeError("stack overflow")
 	}
 	vm.callStack[vm.cst] = callFrame{fn, 0, vm.st - argCount}
 	vm.cst++
@@ -289,13 +309,14 @@ func (vm *VM) peek(distance int) Value {
 }
 
 func (vm *VM) runtimeError(format string, a ...any) error {
+	fmt.Fprint(os.Stderr, "runtime error: ")
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 
 	for i := vm.cst - 1; i >= 0; i-- {
 		frame := &vm.callStack[i]
 		fn := frame.fn
 		line := fn.Lines[frame.cursor]
-		fmt.Fprintf(os.Stderr, "  [line %d] in function\n", line)
+		fmt.Fprintf(os.Stderr, "  ln %d: fn %s\n", line, fn.Name)
 	}
 
 	return ErrInterpretRuntimeError

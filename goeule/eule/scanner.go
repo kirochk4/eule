@@ -9,6 +9,7 @@ type scanner struct {
 	cursor int
 	start  int
 	line   int
+	nl     bool
 }
 
 func newScanner(source []byte) scanner {
@@ -22,6 +23,8 @@ func newScanner(source []byte) scanner {
 }
 
 func (s *scanner) scan() token {
+	line := s.line
+
 skipWhite:
 	for {
 		if s.current() == '#' {
@@ -54,6 +57,12 @@ skipWhite:
 	}
 
 	s.start = s.cursor
+
+	if modeAutoSemicolons {
+		if s.nl && line < s.line {
+			return s.makeToken(tokenNewLine)
+		}
+	}
 
 	if s.isAtEnd() {
 		return s.makeToken(tokenEof)
@@ -88,7 +97,7 @@ skipWhite:
 		return s.string()
 	}
 
-	return s.errorToken("unexpected symbol")
+	return s.errorToken("unexpected symbol '%c'", char)
 }
 
 func (s *scanner) skipShebang() {
@@ -185,6 +194,7 @@ func (s *scanner) advance() byte {
 }
 
 func (s *scanner) makeToken(t tokenType) token {
+	s.nl = mapHas(insertNewLineAfter, t)
 	literal := string(s.source[s.start:s.cursor])
 	tk := token{t, literal, s.line}
 	if debugPrintTokens {
@@ -193,8 +203,8 @@ func (s *scanner) makeToken(t tokenType) token {
 	return tk
 }
 
-func (s *scanner) errorToken(message string) token {
-	return token{tokenError, message, s.line}
+func (s *scanner) errorToken(format string, a ...any) token {
+	return token{tokenError, fmt.Sprintf(format, a...), s.line}
 }
 
 func isAlpha(char byte) bool {
@@ -213,6 +223,20 @@ func isNumeric(char byte, base int) bool {
 
 func lowerChar(char byte) byte {
 	return ('a' - 'A') | char
+}
+
+var insertNewLineAfter = map[tokenType]empty{
+	tokenRightParen:   {},
+	tokenRightBrace:   {},
+	tokenRightBracket: {},
+	tokenPlusPlus:     {},
+	tokenMinusMinus:   {},
+	tokenIdentifier:   {},
+	tokenNumber:       {},
+	tokenString:       {},
+	tokenNihil:        {},
+	tokenFalse:        {},
+	tokenTrue:         {},
 }
 
 var solo = map[byte]tokenType{

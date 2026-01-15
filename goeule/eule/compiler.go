@@ -76,8 +76,12 @@ func (c *compiler) statement() {
 		c.endScope()
 	case c.match(tokenIf):
 		c.ifStatement(false)
+	case c.match(tokenUnless):
+		c.ifStatement(true)
 	case c.match(tokenWhile):
 		c.whileStatement("", false)
+	case c.match(tokenUntil):
+		c.whileStatement("", true)
 	case c.match(tokenDo):
 		c.doStatement("")
 	case c.match(tokenFor):
@@ -100,7 +104,7 @@ func (c *compiler) statement() {
 func (c *compiler) variableDeclaration() {
 	var needSemicolon bool
 	for {
-		nameIndex := c.declareVariable("Expect variable name.")
+		nameIndex := c.declareVariable()
 		name := c.previous.literal
 		if c.match(tokenEqual) {
 			c.expressionComma()
@@ -109,7 +113,7 @@ func (c *compiler) variableDeclaration() {
 			isArrow := c.function(name)
 			needSemicolon = isArrow
 		} else {
-			c.emitBytes(opNihil)
+			c.emit(opNihil)
 			needSemicolon = true
 		}
 		c.defineVariable(nameIndex)
@@ -118,7 +122,7 @@ func (c *compiler) variableDeclaration() {
 		}
 	}
 	if needSemicolon {
-		c.consumeSemicolon("Expect ';' after variable declaration.")
+		c.consumeSemicolon()
 	}
 }
 
@@ -126,20 +130,20 @@ func (c *compiler) block() {
 	for !c.check(tokenRightBrace) && !c.check(tokenEof) {
 		c.declaration()
 	}
-	c.consume(tokenRightBrace, "Expect '}' after block.")
+	c.consume(tokenRightBrace)
 }
 
 func (c *compiler) ifStatement(reverse bool) {
-	c.consume(tokenLeftParen, "Expect '(' after 'if'.")
+	c.consume(tokenLeftParen)
 	c.expression()
-	c.consume(tokenRightParen, "Expect ')' after condition.")
+	c.consume(tokenRightParen)
 
 	if reverse {
-		c.emitBytes(opNot)
+		c.emit(opNot)
 	}
 	thenJump := c.emitJump(opJumpIfFalse)
 
-	c.emitBytes(opPop)
+	c.emit(opPop)
 
 	c.ignoreNewLine()
 	c.statement()
@@ -148,7 +152,7 @@ func (c *compiler) ifStatement(reverse bool) {
 
 	c.patchJump(thenJump)
 
-	c.emitBytes(opPop)
+	c.emit(opPop)
 
 	if c.match(tokenElse) {
 		c.statement()
@@ -161,15 +165,15 @@ func (c *compiler) whileStatement(label string, reverse bool) {
 	c.beginLoop(label, loopLoop)
 	loopStart := len(c.fn.Code)
 
-	c.consume(tokenLeftParen, "Expect '(' after 'while'.")
+	c.consume(tokenLeftParen)
 	c.expression()
-	c.consume(tokenRightParen, "Expect ')' after condition.")
+	c.consume(tokenRightParen)
 
 	if reverse {
-		c.emitBytes(opNot)
+		c.emit(opNot)
 	}
 	exitJump := c.emitJump(opJumpIfFalse)
-	c.emitBytes(opPop)
+	c.emit(opPop)
 
 	c.ignoreNewLine()
 	c.statement()
@@ -177,7 +181,7 @@ func (c *compiler) whileStatement(label string, reverse bool) {
 	c.emitJumpBack(loopStart)
 
 	c.patchJump(exitJump)
-	c.emitBytes(opPop)
+	c.emit(opPop)
 
 	c.endLoop()
 }
@@ -190,31 +194,35 @@ func (c *compiler) doStatement(label string) {
 	c.statement()
 
 	reverse := false
-	c.consume(tokenWhile, "Expect 'while' after do statement.")
-	c.consume(tokenLeftParen, "Expect '(' after 'while'.")
+	if c.match(tokenUntil) {
+		reverse = true
+	} else {
+		c.consume(tokenWhile)
+	}
+	c.consume(tokenLeftParen)
 
 	c.expression()
 
 	if reverse {
-		c.emitBytes(opNot)
+		c.emit(opNot)
 	}
 	exitJump := c.emitJump(opJumpIfFalse)
 
-	c.emitBytes(opPop)
+	c.emit(opPop)
 	c.emitJumpBack(loopStart)
 
-	c.consume(tokenRightParen, "Expect ')' after condition.")
-	c.consumeSemicolon("Expect ';' after while.")
+	c.consume(tokenRightParen)
+	c.consumeSemicolon()
 
 	c.patchJump(exitJump)
-	c.emitBytes(opPop)
+	c.emit(opPop)
 
 	c.endLoop()
 }
 
 func (c *compiler) forStatement(label string) {
 	c.beginScope()
-	c.consume(tokenLeftParen, "Expect '(' after 'for'.")
+	c.consume(tokenLeftParen)
 	if c.match(tokenSemicolon) {
 
 	} else if c.match(tokenVariable) {
@@ -228,18 +236,18 @@ func (c *compiler) forStatement(label string) {
 	exitJump := -1
 	if !c.match(tokenSemicolon) {
 		c.expression()
-		c.consumeSemicolon("Expect ';' after loop condition.")
+		c.consumeSemicolon()
 
 		exitJump = c.emitJump(opJumpIfFalse)
-		c.emitBytes(opPop)
+		c.emit(opPop)
 	}
 
 	if !c.match(tokenRightParen) {
 		bodyJump := c.emitJump(opJump)
 		incrementStart := len(c.fn.Code)
 		c.expression()
-		c.emitBytes(opPop)
-		c.consume(tokenRightParen, "Expect ')' after for clauses.")
+		c.emit(opPop)
+		c.consume(tokenRightParen)
 
 		c.emitJumpBack(loopStart)
 		c.loop.start = incrementStart
@@ -253,7 +261,7 @@ func (c *compiler) forStatement(label string) {
 
 	if exitJump != -1 {
 		c.patchJump(exitJump)
-		c.emitBytes(opPop)
+		c.emit(opPop)
 	}
 
 	c.endLoop()
@@ -282,11 +290,11 @@ func (c *compiler) breakStatement() {
 			}
 			loop = loop.enclosing
 		}
-		c.errorAtPrevious("Can't use 'break' outside of a loop or switch.")
+		c.errorAtPrevious("'break' outside loop")
 		return
 	}
 end:
-	c.consumeSemicolon("Expect ';' after 'break'.")
+	c.consumeSemicolon()
 }
 
 func (c *compiler) continueStatement() {
@@ -311,24 +319,24 @@ func (c *compiler) continueStatement() {
 			}
 			loop = loop.enclosing
 		}
-		c.errorAtPrevious("Can't use 'continue' outside of a loop.")
+		c.errorAtPrevious("'continue' outside loop")
 		return
 	}
 end:
-	c.consumeSemicolon("Expect ';' after 'continue'.")
+	c.consumeSemicolon()
 }
 
 func (c *compiler) returnStatement() {
 	if c.fnType == fnTypeScript {
-		c.errorAtPrevious("Can't return from top-level code.")
+		c.errorAtPrevious("'return' outside function")
 	}
 
 	if c.match(tokenSemicolon) {
 		c.emitReturn()
 	} else {
 		c.expression()
-		c.consumeSemicolon("Expect ';' after return value.")
-		c.emitBytes(opReturn)
+		c.consumeSemicolon()
+		c.emit(opReturn)
 	}
 }
 
@@ -350,14 +358,14 @@ func (c *compiler) labelStatement() {
 		c.endScope()
 		c.endLoop()
 	default:
-		c.errorAtCurrent("wrong label target")
+		c.errorAtCurrent("bad label")
 	}
 }
 
 func (c *compiler) expressionStatement() {
 	c.expression()
-	c.consumeSemicolon("Expect ';' after expression!.")
-	c.emitBytes(opPop)
+	c.consumeExpressionEnd()
+	c.emit(opPop)
 }
 
 /* ==  expression =========================================================== */
@@ -374,7 +382,7 @@ func (c *compiler) precedence(prec precedence) {
 	c.advance()
 	nudFn := c.nud()
 	if nudFn == nil {
-		c.errorAtPrevious("Expect expression.")
+		c.errorAtPrevious("expression expected")
 		return
 	}
 
@@ -388,9 +396,9 @@ func (c *compiler) precedence(prec precedence) {
 	}
 
 	if mapHas(incTokens, c.current.tokenType) {
-		c.errorAtPrevious("Invalid postincrement target.")
+		c.errorAtPrevious("invalid postincrement")
 	} else if canAssign && mapHas(assignTokens, c.current.tokenType) {
-		c.errorAtPrevious("Invalid assignment target.")
+		c.errorAtPrevious("invalid assignment")
 	}
 }
 
@@ -424,7 +432,7 @@ func (c *compiler) nud() parseFn {
 	case tokenFunction:
 		return c.parseFunction
 	case tokenPlus, tokenMinus, tokenBang, tokenTypeOf,
-		tokenPlusPlus, tokenMinusMinus:
+		tokenPlusPlus, tokenMinusMinus, tokenNot:
 		return c.parsePrefix
 	default:
 		return nil
@@ -433,7 +441,7 @@ func (c *compiler) nud() parseFn {
 
 func (c *compiler) parseGroup(canAssign bool) {
 	c.expression()
-	c.consume(tokenRightParen, "Expect ')' after expression.")
+	c.consume(tokenRightParen)
 }
 
 func (c *compiler) parseVariable(canAssign bool) {
@@ -455,9 +463,9 @@ func (c *compiler) namedVariable(name string, canAssign bool) {
 	}
 
 	c.assign(
-		func() { c.emitBytes(setOp, uint8(index)) },
-		func() { c.emitBytes(getOp, uint8(index)) },
-		func() { c.emitBytes(getOp, uint8(index)) },
+		func() { c.emit(setOp, uint8(index)) },
+		func() { c.emit(getOp, uint8(index)) },
+		func() { c.emit(getOp, uint8(index)) },
 		canAssign,
 	)
 }
@@ -475,11 +483,11 @@ func (c *compiler) resolveLocal(name string) (int, bool) {
 func (c *compiler) parseLiteral(canAssign bool) {
 	switch c.previous.tokenType {
 	case tokenNihil:
-		c.emitBytes(opNihil)
+		c.emit(opNihil)
 	case tokenFalse:
-		c.emitBytes(opFalse)
+		c.emit(opFalse)
 	case tokenTrue:
-		c.emitBytes(opTrue)
+		c.emit(opTrue)
 	default:
 		return
 	}
@@ -500,11 +508,11 @@ func (c *compiler) parseString(canAssign bool) {
 
 func (c *compiler) parseTable(canAssign bool) {
 	var index float64 = 0
-	c.emitBytes(opTable)
+	c.emit(opTable)
 	if !c.check(tokenRightBrace) {
 		for {
 			if c.match(tokenDot) {
-				c.consumeIdentifierConstant("identifier expected")
+				c.consumeIdentifierConstant()
 				name := c.previous.literal
 				if c.match(tokenEqual) {
 					c.expressionComma()
@@ -515,15 +523,15 @@ func (c *compiler) parseTable(canAssign bool) {
 				}
 			} else if c.match(tokenLeftBracket) {
 				c.expression()
-				c.consume(tokenRightBracket, "agagagaga")
-				c.consume(tokenEqual, "agagagaga")
+				c.consume(tokenRightBracket)
+				c.consume(tokenEqual)
 				c.expressionComma()
 			} else {
 				c.emitNumber(index)
 				index++
 				c.expressionComma()
 			}
-			c.emitBytes(opDefineKey)
+			c.emit(opDefineKey)
 			if !c.match(tokenComma) {
 				break
 			}
@@ -532,11 +540,11 @@ func (c *compiler) parseTable(canAssign bool) {
 			}
 		}
 	}
-	c.consume(tokenRightBrace, "Expect '}' after map pairs.")
+	c.consume(tokenRightBrace)
 }
 
 func (c *compiler) parseFunction(canAssign bool) {
-	c.consume(tokenLeftParen, "'(' expected")
+	c.consume(tokenLeftParen)
 	c.function("")
 }
 
@@ -549,9 +557,9 @@ func (c *compiler) function(name string) bool {
 	if fc.match(tokenEqualRightAngle) {
 		isArrow = true
 		fc.expressionComma()
-		fc.emitBytes(opReturn)
+		fc.emit(opReturn)
 	} else {
-		fc.consume(tokenLeftBrace, "Expect '{' before function body.")
+		fc.consume(tokenLeftBrace)
 		fc.block()
 		fc.emitReturn()
 	}
@@ -571,18 +579,18 @@ func (c *compiler) parsePrefix(canAssign bool) {
 	}
 	c.precedence(precUn)
 	switch opType {
-	case tokenBang:
-		c.emitBytes(opNot)
+	case tokenBang, tokenNot:
+		c.emit(opNot)
 	case tokenPlus:
-		c.emitBytes(opPos)
+		c.emit(opPos)
 	case tokenMinus:
-		c.emitBytes(opNeg)
+		c.emit(opNeg)
 	case tokenTypeOf:
-		c.emitBytes(opTypeOf)
+		c.emit(opTypeOf)
 	case tokenPlusPlus, tokenMinusMinus:
 		if prefixLen < len(c.prefix) {
 			c.prefix = nil
-			c.errorAtPrevious("invalid preincrement target")
+			c.errorAtPrevious("invalid preincrement")
 		}
 	default:
 		panic(unreachable)
@@ -598,11 +606,11 @@ func (c *compiler) led() parseFn {
 		tokenLeftAngle, tokenLeftAngleEqual,
 		tokenRightAngle, tokenRightAngleEqual:
 		return c.parseInfix
-	case tokenPipePipe:
+	case tokenPipePipe, tokenOr:
 		return c.parseOr
-	case tokenAmperAmper:
+	case tokenAmperAmper, tokenAnd:
 		return c.parseAnd
-	case tokenQuestion:
+	case tokenQuestion, tokenThen:
 		return c.parseTernary
 	case tokenLeftParen:
 		return c.parseCall
@@ -618,7 +626,7 @@ func (c *compiler) led() parseFn {
 }
 
 func (c *compiler) parseComma(canAssign bool) {
-	c.emitBytes(opPop)
+	c.emit(opPop)
 	c.expression()
 }
 
@@ -627,25 +635,25 @@ func (c *compiler) parseInfix(canAssign bool) {
 	c.precedence(precedences[opType] + 1)
 	switch opType {
 	case tokenBangEqual:
-		c.emitBytes(opEq, opNot)
+		c.emit(opEq, opNot)
 	case tokenEqualEqual:
-		c.emitBytes(opEq)
+		c.emit(opEq)
 	case tokenLeftAngle:
-		c.emitBytes(opLt)
+		c.emit(opLt)
 	case tokenLeftAngleEqual:
-		c.emitBytes(opLt)
+		c.emit(opLt)
 	case tokenRightAngle:
-		c.emitBytes(opLe, opNot)
+		c.emit(opLe, opNot)
 	case tokenRightAngleEqual:
-		c.emitBytes(opLt, opNot)
+		c.emit(opLt, opNot)
 	case tokenPlus:
-		c.emitBytes(opAdd)
+		c.emit(opAdd)
 	case tokenMinus:
-		c.emitBytes(opSub)
+		c.emit(opSub)
 	case tokenStar:
-		c.emitBytes(opMul)
+		c.emit(opMul)
 	case tokenSlash:
-		c.emitBytes(opDiv)
+		c.emit(opDiv)
 	default:
 		panic(unreachable)
 	}
@@ -655,63 +663,65 @@ func (c *compiler) parseOr(canAssign bool) {
 	elseJump := c.emitJump(opJumpIfFalse)
 	endJump := c.emitJump(opJump)
 	c.patchJump(elseJump)
-	c.emitBytes(opPop)
+	c.emit(opPop)
 	c.precedence(precOr)
 	c.patchJump(endJump)
 }
 
 func (c *compiler) parseAnd(canAssign bool) {
 	endJump := c.emitJump(opJumpIfFalse)
-	c.emitBytes(opPop)
+	c.emit(opPop)
 	c.precedence(precAnd)
 	c.patchJump(endJump)
 }
 
 func (c *compiler) parseTernary(canAssign bool) {
 	thenJump := c.emitJump(opJumpIfFalse)
-	c.emitBytes(opPop)
+	c.emit(opPop)
 	c.expression()
 	elseJump := c.emitJump(opJump)
-	c.consume(tokenColon, "Expect ':' after expression.")
+	if !c.match(tokenElse) {
+		c.consume(tokenColon)
+	}
 	c.patchJump(thenJump)
-	c.emitBytes(opPop)
+	c.emit(opPop)
 	c.expression()
 	c.patchJump(elseJump)
 }
 
 func (c *compiler) parseCall(canAssign bool) {
 	argCount := c.argumentList()
-	c.emitBytes(opCall, argCount)
+	c.emit(opCall, argCount)
 }
 
 func (c *compiler) parseKey(canAssign bool) {
 	c.expression()
-	c.consume(tokenRightBracket, "Expect ']' after index.")
+	c.consume(tokenRightBracket)
 	c.assign(
-		func() { c.emitBytes(opStoreKey) },
-		func() { c.emitBytes(opLoadKey) },
-		func() { c.emitBytes(opLoadKeyNoPop) },
+		func() { c.emit(opStoreKey) },
+		func() { c.emit(opLoadKey) },
+		func() { c.emit(opLoadKeyNoPop) },
 		canAssign,
 	)
 }
 
 func (c *compiler) parseDot(canAssign bool) {
-	c.consumeIdentifierConstant("agagagagagga")
+	c.consumeIdentifierConstant()
 	c.assign(
-		func() { c.emitBytes(opStoreKey) },
-		func() { c.emitBytes(opLoadKey) },
-		func() { c.emitBytes(opLoadKeyNoPop) },
+		func() { c.emit(opStoreKey) },
+		func() { c.emit(opLoadKey) },
+		func() { c.emit(opLoadKeyNoPop) },
 		canAssign,
 	)
 }
 
 func (c *compiler) parseArrow(canAssign bool) {
-	c.emitBytes(opDup)
-	c.consumeIdentifierConstant("agagagagagga")
-	c.emitBytes(opLoadKey, opSwap)
-	c.consume(tokenLeftParen, "'('")
+	c.emit(opDup)
+	c.consumeIdentifierConstant()
+	c.emit(opLoadKey, opSwap)
+	c.consume(tokenLeftParen)
 	argCount := c.argumentList()
-	c.emitBytes(opCall, argCount+1)
+	c.emit(opCall, argCount+1)
 }
 
 /* == utilities ============================================================= */
@@ -721,28 +731,28 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 		if slicePop(&c.prefix) {
 			getNoPop()
 			c.emitNumber(1)
-			c.emitBytes(opAdd)
+			c.emit(opAdd)
 			set()
 		} else {
 			getNoPop()
 			c.emitNumber(1)
-			c.emitBytes(opSub)
+			c.emit(opSub)
 			set()
 		}
 	} else if c.match(tokenPlusPlus) {
 		getNoPop()
-		c.emitBytes(opStoreTemp)
+		c.emit(opStoreTemp)
 		c.emitNumber(1)
-		c.emitBytes(opAdd)
+		c.emit(opAdd)
 		set()
-		c.emitBytes(opLoadTemp)
+		c.emit(opLoadTemp)
 	} else if c.match(tokenMinusMinus) {
 		getNoPop()
-		c.emitBytes(opStoreTemp)
+		c.emit(opStoreTemp)
 		c.emitNumber(1)
-		c.emitBytes(opSub)
+		c.emit(opSub)
 		set()
-		c.emitBytes(opLoadTemp)
+		c.emit(opLoadTemp)
 	} else if canAssign {
 		switch {
 		case c.match(tokenEqual):
@@ -751,22 +761,22 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 		case c.match(tokenPlusEqual):
 			getNoPop()
 			c.expression()
-			c.emitBytes(opAdd)
+			c.emit(opAdd)
 			set()
 		case c.match(tokenMinusEqual):
 			getNoPop()
 			c.expression()
-			c.emitBytes(opSub)
+			c.emit(opSub)
 			set()
 		case c.match(tokenStarEqual):
 			getNoPop()
 			c.expression()
-			c.emitBytes(opMul)
+			c.emit(opMul)
 			set()
 		case c.match(tokenSlashEqual):
 			getNoPop()
 			c.expression()
-			c.emitBytes(opDiv)
+			c.emit(opDiv)
 			set()
 		default:
 			get()
@@ -776,8 +786,8 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 	}
 }
 
-func (c *compiler) declareVariable(message string) uint8 {
-	c.consume(tokenIdentifier, message)
+func (c *compiler) declareVariable() uint8 {
+	c.consume(tokenIdentifier)
 	c.declareName()
 	if c.scope == 0 {
 		return c.makeConstant(String(c.previous.literal))
@@ -788,7 +798,7 @@ func (c *compiler) declareVariable(message string) uint8 {
 
 func (c *compiler) defineVariable(nameIndex uint8) {
 	if c.scope == 0 {
-		c.emitBytes(opDefineGlobal, nameIndex)
+		c.emit(opDefineGlobal, nameIndex)
 	} else {
 		c.markInitialized()
 	}
@@ -819,7 +829,7 @@ func (c *compiler) addLocal(name string) {
 	}
 
 	if len(c.locals) == uint8Count {
-		c.errorAtPrevious("Too many local variables in function.")
+		c.errorAtPrevious("variables overflow (256)")
 	}
 	c.locals = append(c.locals, localVariable{name, c.scope, false})
 }
@@ -835,13 +845,13 @@ func (c *compiler) markInitialized() {
 func (c *compiler) makeConstant(value Value) uint8 {
 	index := c.fn.addConstant(value)
 	if index > int(uint8Max) {
-		c.errorAtPrevious("Too many constants in one chunk.")
+		c.errorAtPrevious("constants overflow (256)")
 		return 0
 	}
 	return uint8(index)
 }
 
-func (c *compiler) emitBytes(b ...uint8) {
+func (c *compiler) emit(b ...uint8) {
 	for _, b := range b {
 		c.fn.writeCode(b, c.previous.line)
 	}
@@ -850,29 +860,29 @@ func (c *compiler) emitBytes(b ...uint8) {
 func (c *compiler) emitNumber(num float64) {
 	if 0 <= num && num <= float64(uint8Max) &&
 		math.Floor(num) == num {
-		c.emitBytes(opSmallInteger, uint8(num))
+		c.emit(opSmallInteger, uint8(num))
 	} else {
 		c.emitConstant(Number(num))
 	}
 }
 
 func (c *compiler) emitConstant(value Value) {
-	c.emitBytes(opConstant, c.makeConstant(value))
+	c.emit(opConstant, c.makeConstant(value))
 }
 
-func (c *compiler) consumeIdentifierConstant(message string) {
-	c.consume(tokenIdentifier, message)
+func (c *compiler) consumeIdentifierConstant() {
+	c.consume(tokenIdentifier)
 	c.emitConstant(String(c.previous.literal))
 }
 
 func (c *compiler) emitReturn() {
-	c.emitBytes(opNihil, opReturn)
+	c.emit(opNihil, opReturn)
 }
 
 func (c *compiler) emitJump(instruction uint8) int {
-	c.emitBytes(instruction)
-	c.emitBytes(0xff)
-	c.emitBytes(0xff)
+	c.emit(instruction)
+	c.emit(0xff)
+	c.emit(0xff)
 	return len(c.fn.Code) - 2
 }
 
@@ -880,7 +890,7 @@ func (c *compiler) patchJump(offset int) {
 	jump := len(c.fn.Code) - offset - 2
 
 	if jump > int(uint16Max) {
-		c.errorAtPrevious("Too much code to jump over.")
+		c.errorAtPrevious("too long jump")
 	}
 
 	c.fn.Code[offset] = uint8((jump >> 8) & 0xff)
@@ -888,15 +898,15 @@ func (c *compiler) patchJump(offset int) {
 }
 
 func (c *compiler) emitJumpBack(loopStart int) {
-	c.emitBytes(opJumpBack)
+	c.emit(opJumpBack)
 
 	offset := len(c.fn.Code) - loopStart + 2
 	if offset > int(uint16Max) {
-		c.errorAtPrevious("Loop body too large.")
+		c.errorAtPrevious("too long jump")
 	}
 
-	c.emitBytes(uint8((offset >> 8) & 0xff))
-	c.emitBytes(uint8(offset & 0xff))
+	c.emit(uint8((offset >> 8) & 0xff))
+	c.emit(uint8(offset & 0xff))
 }
 
 func (c *compiler) beginScope() { c.scope++ }
@@ -905,7 +915,7 @@ func (c *compiler) endScope() {
 	c.scope--
 
 	for len(c.locals) > 0 && c.locals[len(c.locals)-1].depth > c.scope {
-		c.emitBytes(opPop)
+		c.emit(opPop)
 		c.locals = c.locals[:len(c.locals)-1]
 	}
 }
@@ -927,7 +937,7 @@ func (c *compiler) argumentList() uint8 {
 		for {
 			c.expressionComma()
 			if argCount == 255 {
-				c.errorAtPrevious("Can't have more than 255 arguments.")
+				c.errorAtPrevious("arguments overflow (255)")
 			}
 			argCount++
 			if !c.match(tokenComma) {
@@ -938,7 +948,7 @@ func (c *compiler) argumentList() uint8 {
 			}
 		}
 	}
-	c.consume(tokenRightParen, "Expect ')' after arguments.")
+	c.consume(tokenRightParen)
 	return argCount
 }
 
@@ -947,9 +957,9 @@ func (c *compiler) parameterList() {
 		for {
 			c.fn.Arity++
 			if c.fn.Arity > 255 {
-				c.errorAtCurrent("Can't have more than 255 parameters.")
+				c.errorAtCurrent("parameters overflow (255)")
 			}
-			parameterIndex := c.declareVariable("Expect parameter name.")
+			parameterIndex := c.declareVariable()
 			c.defineVariable(parameterIndex)
 			if !c.match(tokenComma) {
 				break
@@ -959,7 +969,7 @@ func (c *compiler) parameterList() {
 			}
 		}
 	}
-	c.consume(tokenRightParen, "Expect ')' after parameters.")
+	c.consume(tokenRightParen)
 }
 
 // == precedence ============================================================ */
@@ -989,13 +999,14 @@ const (
 var precedences = map[tokenType]precedence{
 	tokenComma: precComma,
 
-	tokenEqual: precAssign,
-
 	tokenQuestion: precTern,
+	tokenThen:     precTern,
 
 	tokenPipePipe: precOr,
+	tokenOr:       precOr,
 
 	tokenAmperAmper: precAnd,
+	tokenAnd:        precAnd,
 
 	tokenEqualEqual: precEq,
 	tokenBangEqual:  precEq,
@@ -1040,7 +1051,12 @@ func (r *tokenReader) errorAt(token *token, message string) {
 		return
 	}
 	r.panic = true
-	fmt.Fprintf(os.Stderr, "[ln %d] %s", token.line, message)
+	if !r.hadError {
+		fmt.Fprint(os.Stderr, "compile error: ")
+	} else {
+		fmt.Fprint(os.Stderr, "  ")
+	}
+	fmt.Fprintf(os.Stderr, "ln %d: %s", token.line, message)
 
 	switch token.tokenType {
 	case tokenEof:
@@ -1074,16 +1090,30 @@ func (r *tokenReader) advance() {
 	}
 }
 
-func (r *tokenReader) consume(t tokenType, message string) {
+func (r *tokenReader) consume(t tokenType) {
 	if r.current.tokenType == t {
 		r.advance()
 		return
 	}
-	r.errorAtCurrent(message)
+	r.errorAtCurrent(fmt.Sprintf("'%s' expected", t))
 }
 
-func (r *tokenReader) consumeSemicolon(message string) {
-	r.consume(tokenSemicolon, message)
+func (r *tokenReader) consumeSemicolon() {
+	if modeAutoSemicolons {
+		if !r.match(tokenNewLine) {
+			r.consume(tokenSemicolon)
+		}
+	} else {
+		r.consume(tokenSemicolon)
+	}
+}
+
+func (r *tokenReader) consumeExpressionEnd() {
+	if modeAutoSemicolons {
+		_ = r.match(tokenNewLine) || r.match(tokenSemicolon)
+	} else {
+		r.consumeSemicolon()
+	}
 }
 
 func (r *tokenReader) ignoreNewLine() { r.match(tokenNewLine) }

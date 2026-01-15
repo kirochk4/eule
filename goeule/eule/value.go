@@ -31,7 +31,10 @@ func (t *Table) Store(keyValue Value, value Value) Value {
 }
 
 func (t *Table) Load(keyValue Value) Value {
-	return t.Pairs[keyValue.toString()]
+	if value, ok := t.Pairs[keyValue.toString()]; ok {
+		return value
+	}
+	return Nihil{}
 }
 
 func (t *Table) Has(keyValue Value) Boolean {
@@ -80,7 +83,7 @@ type Native func(vm *VM, values []Value) Value
 
 func nativePrint(vm *VM, values []Value) Value {
 	for _, value := range values {
-		fmt.Printf("%v ", value)
+		fmt.Printf("%v", value)
 	}
 	fmt.Println()
 	return Nihil{}
@@ -90,7 +93,7 @@ func nativeClock(vm *VM, values []Value) Value {
 	return Number(float64(time.Now().UnixNano()) / float64(time.Second))
 }
 
-func (v Nihil) String() string     { return "void" }
+func (v Nihil) String() string     { return nihilLiteral }
 func (v Boolean) String() string   { return strconv.FormatBool(bool(v)) }
 func (v Number) String() string    { return formatNumber(v) }
 func (v String) String() string    { return string(v) }
@@ -122,7 +125,7 @@ func isNihil(v Value) bool {
 func typeOf(v Value) String {
 	switch v.(type) {
 	case Nihil:
-		return "void"
+		return nihilLiteral
 	case Boolean:
 		return "bool"
 	case Number:

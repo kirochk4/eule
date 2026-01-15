@@ -1,0 +1,4 @@
+var a = "before";
+var c = a = "var";
+print(a); // out: var
+print(c); // out: var

@@ -11,7 +11,7 @@ const Version = "0.0.0"
 const (
 	debugPrintTokens    = false
 	debugPrintBytecode  = false
-	debugTraceExecution = true
+	debugTraceExecution = false
 )
 
 const (
@@ -21,6 +21,10 @@ const (
 	uint8Count int = math.MaxUint8 + 1
 
 	unreachable = "unreachable"
+
+	nihilLiteral    = "void"
+	variableLiteral = "var"
+	functionLiteral = "function"
 )
 
 type empty struct{}
@@ -85,4 +89,9 @@ func formatTable(tbl *Table) string {
 
 func zero[T any]() T {
 	return map[int]T{}[0]
+}
+
+func mapHas[T comparable, U any](m map[T]U, k T) bool {
+	_, ok := m[k]
+	return ok
 }

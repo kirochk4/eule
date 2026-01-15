@@ -9,5 +9,5 @@ def cover(string: str, width: int = 24, char: str = "=") -> str:
     if to_cover < 0:
         return string
     left = to_cover // 2
-    right =  left + to_cover % 2
+    right = left + to_cover % 2
     return f"{left * char} {string} {right * char}"

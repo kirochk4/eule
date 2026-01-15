@@ -3,6 +3,7 @@ package eule
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 )
 
@@ -201,7 +202,7 @@ func (vm *VM) run() error {
 				return vm.runtimeError("Operand must be a number.")
 			}
 			vm.pop()
-			vm.push(+v)
+			vm.push(Number(math.Abs(float64(v))))
 		case opTypeOf:
 			vm.push(typeOf(vm.pop()))
 		case opJump:

@@ -15,6 +15,7 @@ type compiler struct {
 	*loop
 	enclosing *compiler
 	scope     int
+	prefix    int
 }
 
 func newCompiler(source []byte) *compiler {
@@ -26,6 +27,7 @@ func newCompiler(source []byte) *compiler {
 		loop:        nil,
 		enclosing:   nil,
 		scope:       0,
+		prefix:      0,
 	}
 }
 
@@ -279,7 +281,7 @@ func (c *compiler) returnStatement() {
 
 func (c *compiler) expressionStatement() {
 	c.expression()
-	c.consumeSemicolon("Expect ';' after expression.")
+	c.consumeSemicolon("Expect ';' after expression!.")
 	c.emitBytes(opPop)
 }
 
@@ -310,9 +312,17 @@ func (c *compiler) precedence(prec precedence) {
 		ledFn(canAssign)
 	}
 
-	if canAssign && c.match(tokenEqual) {
+	if canAssign && mapHas(assignTokens, c.current.tokenType) {
 		c.errorAtPrevious("Invalid assignment target.")
 	}
+}
+
+var assignTokens = map[tokenType]empty{
+	tokenEqual:      {},
+	tokenPlusEqual:  {},
+	tokenMinusEqual: {},
+	tokenStarEqual:  {},
+	tokenSlashEqual: {},
 }
 
 func (c *compiler) nud() parseFn {
@@ -464,6 +474,12 @@ func (c *compiler) function() bool {
 
 func (c *compiler) parsePrefix(canAssign bool) {
 	opType := c.previous.tokenType
+	switch opType {
+	case tokenPlusPlus:
+		c.prefix = 1
+	case tokenMinusMinus:
+		c.prefix = -1
+	}
 	c.precedence(precUn)
 	switch opType {
 	case tokenBang:
@@ -474,10 +490,8 @@ func (c *compiler) parsePrefix(canAssign bool) {
 		c.emitBytes(opNeg)
 	case tokenTypeOf:
 		c.emitBytes(opTypeOf)
-	case tokenPlusPlus:
-
-	case tokenMinusMinus:
-
+	case tokenPlusPlus, tokenMinusMinus:
+		/* pass */
 	default:
 		panic(unreachable)
 	}
@@ -600,7 +614,20 @@ func (c *compiler) parseDot(canAssign bool) {
 /* == utilities ============================================================= */
 
 func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
-	if c.match(tokenPlusPlus) {
+	if c.prefix != 0 && precedences[c.current.tokenType] <= precUn {
+		if c.prefix > 0 {
+			getNoPop()
+			c.emitNumber(1)
+			c.emitBytes(opAdd)
+			set()
+		} else {
+			getNoPop()
+			c.emitNumber(1)
+			c.emitBytes(opSub)
+			set()
+		}
+		c.prefix = 0
+	} else if c.match(tokenPlusPlus) {
 		getNoPop()
 		c.emitBytes(opStoreTemp)
 		c.emitNumber(1)
@@ -617,6 +644,8 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 	} else if canAssign {
 		switch {
 		case c.match(tokenEqual):
+			c.expression()
+			set()
 		case c.match(tokenPlusEqual):
 			getNoPop()
 			c.expression()

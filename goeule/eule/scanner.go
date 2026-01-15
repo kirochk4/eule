@@ -98,7 +98,7 @@ func (s *scanner) skipShebang() {
 }
 
 func (s *scanner) skipLineComment() {
-	for s.current() != '\n' {
+	for s.current() != '\n' && !s.isAtEnd() {
 		s.advance()
 	}
 }
@@ -265,9 +265,9 @@ var keywords = map[string]tokenType{
 	"false": tokenFalse,
 	"true":  tokenTrue,
 
-	"void":     tokenNihil,
-	"var":      tokenVariable,
-	"function": tokenFunction,
+	nihilLiteral:    tokenNihil,
+	variableLiteral: tokenVariable,
+	functionLiteral: tokenFunction,
 
 	"if":       tokenIf,
 	"else":     tokenElse,

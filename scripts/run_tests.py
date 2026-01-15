@@ -1,12 +1,9 @@
 from lib import *
 
 import os
-import subprocess
 import pathlib
 import re
 
-from itertools import chain
-from typing import Iterable
 
 TEMP_NAME = "__test_build.exe"
 EXTS = ["eult"]
@@ -14,14 +11,12 @@ GO_WD = "./goeule"
 GO_MAIN = "."
 TEST_FOLDER = "../tests"
 
-os.chdir(GO_WD)
-
 
 def read_out(file: pathlib.Path) -> list[str]:
     out: list[str] = []
     with open(file, "r", encoding="utf-8") as f:
         for line in f.readlines():
-            if match := re.search(r"\/\/ out:(.+)", line):
+            if match := re.search(r"# out:(.+)", line):
                 out.append(match.group(1).strip())
     return out
 
@@ -29,20 +24,9 @@ def read_out(file: pathlib.Path) -> list[str]:
 def read_err(file: pathlib.Path) -> str:
     with open(file, "r", encoding="utf-8") as f:
         for line in f.readlines():
-            if match := re.search(r"\/\/ err:(.+)", line):
+            if match := re.search(r"# err:(.+)", line):
                 return match.group(1).strip()
     return ""
-
-
-def run_script(file: pathlib.Path) -> tuple[str, str]:
-    result = subprocess.run(
-        [TEMP_NAME, file],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=2,
-    )
-    return result.stdout, result.stderr
 
 
 def check_out(out: str, expect: list[str]) -> str | None:
@@ -61,11 +45,8 @@ def check_err(err: str, expect: str) -> str | None:
         return f"expected '{expect}', got '{out}'"
 
 
-def read_files(folder: str, exts: list[str]) -> Iterable[pathlib.Path]:
-    return chain(*[pathlib.Path(folder).rglob(f"*.{ext}") for ext in exts])
-
-
 if __name__ == "__main__":
+    os.chdir(GO_WD)
     os.system(f"go build -o {TEMP_NAME} {GO_MAIN}")
 
     try:
@@ -75,7 +56,7 @@ if __name__ == "__main__":
             out = read_out(file)
             err = read_err(file)
 
-            stdout, stderr = run_script(file)
+            stdout, stderr = run_script(TEMP_NAME, file, timeout=2)
 
             if stderr:
                 result = check_err(stderr, err)

@@ -5,6 +5,7 @@ import "fmt"
 const (
 	opPop uint8 = iota
 	opDup
+	opSwap
 
 	opNihil
 	opFalse
@@ -77,15 +78,15 @@ func printInstruction(f *Function, offset int) int {
 	}
 
 	switch instruction := f.Code[offset]; instruction {
-	case opPop, opDup, opNihil, opFalse, opTrue, opTable, opAdd, opSub, opMul,
-		opDiv, opEq, opLt, opLe, opNot, opNeg, opPos, opTypeOf, opReturn,
-		opStoreTemp, opLoadTemp:
+	case opPop, opDup, opSwap, opNihil, opFalse, opTrue, opTable, opAdd, opSub,
+		opMul, opDiv, opEq, opLt, opLe, opNot, opNeg, opPos, opTypeOf, opReturn,
+		opStoreTemp, opLoadTemp, opDefineKey, opStoreKey, opLoadKey,
+		opLoadKeyNoPop:
 		return simpleInstruction(f, offset)
 	case opConstant, opDefineGlobal, opStoreGlobal,
 		opLoadGlobal:
 		return constantInstruction(f, offset)
-	case opSmallInteger, opCall, opStoreLocal, opLoadLocal, opDefineKey,
-		opStoreKey, opLoadKey, opLoadKeyNoPop:
+	case opSmallInteger, opCall, opStoreLocal, opLoadLocal:
 		return byteInstruction(f, offset)
 	case opJump, opJumpIfFalse, opJumpBack:
 		sign := 1
@@ -132,8 +133,9 @@ func jumpInstruction(f *Function, offset int, sign int) int {
 }
 
 var opNames = [...]string{
-	opPop: "pop",
-	opDup: "dup",
+	opPop:  "pop",
+	opDup:  "dup",
+	opSwap: "swap",
 
 	opNihil: "nihil",
 	opFalse: "false",

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 )
 
 const Version = "0.0.0"
@@ -22,9 +23,9 @@ const (
 
 	unreachable = "unreachable"
 
-	nihilLiteral    = "void"
-	variableLiteral = "var"
-	functionLiteral = "function"
+	nihilLiteral    = "nil"
+	variableLiteral = "let"
+	functionLiteral = "def"
 )
 
 type empty struct{}
@@ -68,6 +69,10 @@ func boolToInt(b bool) int {
 	}
 }
 
+func IntToBool(i int) bool {
+	return i != 0
+}
+
 func formatNumber(num Number) string {
 	f := float64(num)
 	if math.IsNaN(f) {
@@ -79,19 +84,60 @@ func formatNumber(num Number) string {
 			return "-inf"
 		}
 	} else {
-		return strconv.FormatFloat(float64(num), 'g', -1, 64)
+		return strconv.FormatFloat(float64(num), 'f', -1, 64)
 	}
 }
 
 func formatTable(tbl *Table) string {
-	return "<table>"
+	if len(tbl.Pairs) == 0 {
+		return "{}"
+	}
+	var str strings.Builder
+	str.WriteString("{ ")
+	i := 0
+	for k, v := range tbl.Pairs {
+		str.WriteString(fmt.Sprintf("\"%s\": %s", k, v.toString()))
+		if i != len(tbl.Pairs)-1 {
+			str.WriteString(", ")
+		}
+	}
+	str.WriteString(" }")
+	return str.String()
 }
 
-func zero[T any]() T {
-	return map[int]T{}[0]
-}
+func zero[T any]() (t T) { return }
 
 func mapHas[T comparable, U any](m map[T]U, k T) bool {
 	_, ok := m[k]
 	return ok
+}
+
+func sliceLast[T any](s []T) (t T) {
+	if len(s) == 0 {
+		return
+	}
+	return s[len(s)-1]
+}
+
+func slicePop[T any](s *[]T) (t T) {
+	if len(*s) == 0 {
+		return
+	}
+	v := (*s)[len(*s)-1]
+	*s = (*s)[:len(*s)-1]
+	return v
+}
+
+func slicePush[T any](s *[]T, a ...T) {
+	*s = append(*s, a...)
+}
+
+func catch[E any](onCatch func(E)) {
+	if p := recover(); p != nil {
+		if pe, ok := p.(E); ok {
+			onCatch(pe)
+		} else {
+			panic(p)
+		}
+	}
 }

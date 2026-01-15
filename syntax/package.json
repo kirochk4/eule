@@ -1,0 +1,37 @@
+{
+  "name": "eule-language",
+  "displayName": "Eule Language",
+  "description": "Syntax highlighting for Eule programming language",
+  "version": "0.0.0",
+  "publisher": "",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "eule",
+        "aliases": [
+          "Eule",
+          "eule"
+        ],
+        "extensions": [
+          ".eule",
+          ".eult",
+          ".eul"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "eule",
+        "scopeName": "source.eule",
+        "path": "./syntaxes/eule.tmLanguage.json"
+      }
+    ]
+  }
+}

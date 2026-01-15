@@ -24,7 +24,7 @@ func newScanner(source []byte) scanner {
 func (s *scanner) scan() token {
 skipWhite:
 	for {
-		if s.current() == '/' && s.peek() == '/' {
+		if s.current() == '#' {
 			s.skipLineComment()
 		} else if s.current() == '/' && s.peek() == '*' {
 			s.advance()
@@ -198,17 +198,17 @@ func (s *scanner) errorToken(message string) token {
 }
 
 func isAlpha(char byte) bool {
-	char = lowerChar(char)
-	return 'a' <= char && char <= 'z' || char == '_'
+	lChar := lowerChar(char)
+	return 'a' <= lChar && lChar <= 'z' || char == '_'
 }
 
 func isNumeric(char byte, base int) bool {
 	if base <= 10 {
 		return '0' <= char && char <= '0'+byte(base)-1
 	}
-	char = lowerChar(char)
+	lChar := lowerChar(char)
 	return ('0' <= char && char <= '9') ||
-		('a' <= char && char <= 'a'+byte(base)-1)
+		('a' <= lChar && lChar <= 'a'+byte(base)-1)
 }
 
 func lowerChar(char byte) byte {
@@ -248,6 +248,9 @@ var duo = map[[2]byte]tokenType{
 	{'+', '+'}: tokenPlusPlus,
 	{'-', '-'}: tokenMinusMinus,
 
+	{'-', '>'}: tokenMinusRightAngle,
+	{'=', '>'}: tokenEqualRightAngle,
+
 	{'+', '='}: tokenPlusEqual,
 	{'-', '='}: tokenMinusEqual,
 	{'*', '='}: tokenStarEqual,
@@ -277,6 +280,17 @@ var keywords = map[string]tokenType{
 	"break":    tokenBreak,
 	"continue": tokenContinue,
 	"return":   tokenReturn,
+
+	"switch":  tokenSwitch,
+	"case":    tokenCase,
+	"default": tokenDefault,
+	"and":     tokenAnd,
+	"or":      tokenOr,
+	"not":     tokenNot,
+	"unless":  tokenUnless,
+	"until":   tokenUntil,
+	"foreach": tokenForEach,
+	"then":    tokenThen,
 
 	"typeof": tokenTypeOf,
 }

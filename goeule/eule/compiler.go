@@ -15,26 +15,25 @@ type compiler struct {
 	*loop
 	enclosing *compiler
 	scope     int
-	prefix    int
+	prefix    []bool
 }
 
 func newCompiler(source []byte) *compiler {
 	return &compiler{
 		tokenReader: newTokenReader(source),
-		fn:          NewFunction(),
+		fn:          NewFunction("@"),
 		fnType:      fnTypeScript,
 		locals:      []localVariable{},
 		loop:        nil,
 		enclosing:   nil,
 		scope:       0,
-		prefix:      0,
 	}
 }
 
-func (c *compiler) newFunctionCompiler(t fnType) *compiler {
+func (c *compiler) newFunctionCompiler(t fnType, name string) *compiler {
 	return &compiler{
 		tokenReader: c.tokenReader,
-		fn:          NewFunction(),
+		fn:          NewFunction(name),
 		fnType:      t,
 		locals:      []localVariable{},
 		loop:        nil,
@@ -76,19 +75,21 @@ func (c *compiler) statement() {
 		c.block()
 		c.endScope()
 	case c.match(tokenIf):
-		c.ifStatement()
+		c.ifStatement(false)
 	case c.match(tokenWhile):
-		c.whileStatement()
+		c.whileStatement("", false)
 	case c.match(tokenDo):
-		c.doStatement()
+		c.doStatement("")
 	case c.match(tokenFor):
-		c.forStatement()
+		c.forStatement("")
 	case c.match(tokenBreak):
 		c.breakStatement()
 	case c.match(tokenContinue):
 		c.continueStatement()
 	case c.match(tokenReturn):
 		c.returnStatement()
+	case c.check(tokenIdentifier) && c.checkNext(tokenColon):
+		c.labelStatement()
 	default:
 		c.expressionStatement()
 	}
@@ -100,11 +101,12 @@ func (c *compiler) variableDeclaration() {
 	var needSemicolon bool
 	for {
 		nameIndex := c.declareVariable("Expect variable name.")
+		name := c.previous.literal
 		if c.match(tokenEqual) {
 			c.expressionComma()
 			needSemicolon = true
 		} else if c.match(tokenLeftParen) {
-			isArrow := c.function()
+			isArrow := c.function(name)
 			needSemicolon = isArrow
 		} else {
 			c.emitBytes(opNihil)
@@ -127,11 +129,14 @@ func (c *compiler) block() {
 	c.consume(tokenRightBrace, "Expect '}' after block.")
 }
 
-func (c *compiler) ifStatement() {
+func (c *compiler) ifStatement(reverse bool) {
 	c.consume(tokenLeftParen, "Expect '(' after 'if'.")
 	c.expression()
 	c.consume(tokenRightParen, "Expect ')' after condition.")
 
+	if reverse {
+		c.emitBytes(opNot)
+	}
 	thenJump := c.emitJump(opJumpIfFalse)
 
 	c.emitBytes(opPop)
@@ -152,14 +157,17 @@ func (c *compiler) ifStatement() {
 	c.patchJump(elseJump)
 }
 
-func (c *compiler) whileStatement() {
-	c.beginLoop()
+func (c *compiler) whileStatement(label string, reverse bool) {
+	c.beginLoop(label, loopLoop)
 	loopStart := len(c.fn.Code)
 
 	c.consume(tokenLeftParen, "Expect '(' after 'while'.")
 	c.expression()
 	c.consume(tokenRightParen, "Expect ')' after condition.")
 
+	if reverse {
+		c.emitBytes(opNot)
+	}
 	exitJump := c.emitJump(opJumpIfFalse)
 	c.emitBytes(opPop)
 
@@ -174,17 +182,22 @@ func (c *compiler) whileStatement() {
 	c.endLoop()
 }
 
-func (c *compiler) doStatement() {
-	c.beginLoop()
+func (c *compiler) doStatement(label string) {
+	c.beginLoop(label, loopLoop)
 	loopStart := len(c.fn.Code)
 
 	c.ignoreNewLine()
 	c.statement()
 
+	reverse := false
 	c.consume(tokenWhile, "Expect 'while' after do statement.")
 	c.consume(tokenLeftParen, "Expect '(' after 'while'.")
 
 	c.expression()
+
+	if reverse {
+		c.emitBytes(opNot)
+	}
 	exitJump := c.emitJump(opJumpIfFalse)
 
 	c.emitBytes(opPop)
@@ -199,7 +212,7 @@ func (c *compiler) doStatement() {
 	c.endLoop()
 }
 
-func (c *compiler) forStatement() {
+func (c *compiler) forStatement(label string) {
 	c.beginScope()
 	c.consume(tokenLeftParen, "Expect '(' after 'for'.")
 	if c.match(tokenSemicolon) {
@@ -210,7 +223,7 @@ func (c *compiler) forStatement() {
 		c.expressionStatement()
 	}
 
-	c.beginLoop()
+	c.beginLoop(label, loopLoop)
 	loopStart := len(c.fn.Code)
 	exitJump := -1
 	if !c.match(tokenSemicolon) {
@@ -248,21 +261,61 @@ func (c *compiler) forStatement() {
 }
 
 func (c *compiler) breakStatement() {
-	if c.loop == nil {
-		c.errorAtPrevious("Can't use 'break' outside of a loop.")
+	if c.match(tokenIdentifier) {
+		label := c.previous.literal
+		loop := c.loop
+		for loop != nil {
+			if loop.label == label {
+				loop.addBreak(c.emitJump(opJump))
+				goto end
+			}
+			loop = loop.enclosing
+		}
+		c.errorAtPrevious("undefined label")
+		return
+	} else {
+		loop := c.loop
+		for loop != nil {
+			if loop.loopType == loopLoop || loop.loopType == loopSwitch {
+				loop.addBreak(c.emitJump(opJump))
+				goto end
+			}
+			loop = loop.enclosing
+		}
+		c.errorAtPrevious("Can't use 'break' outside of a loop or switch.")
 		return
 	}
+end:
 	c.consumeSemicolon("Expect ';' after 'break'.")
-	c.loop.addBreak(c.emitJump(opJump))
 }
 
 func (c *compiler) continueStatement() {
-	if c.loop == nil {
+	if c.match(tokenIdentifier) {
+		label := c.previous.literal
+		loop := c.loop
+		for loop != nil {
+			if loop.label == label {
+				c.emitJumpBack(c.loop.start)
+				goto end
+			}
+			loop = loop.enclosing
+		}
+		c.errorAtPrevious("undefined label")
+		return
+	} else {
+		loop := c.loop
+		for loop != nil {
+			if loop.loopType == loopLoop {
+				c.emitJumpBack(c.loop.start)
+				goto end
+			}
+			loop = loop.enclosing
+		}
 		c.errorAtPrevious("Can't use 'continue' outside of a loop.")
 		return
 	}
+end:
 	c.consumeSemicolon("Expect ';' after 'continue'.")
-	c.emitJumpBack(c.loop.start)
 }
 
 func (c *compiler) returnStatement() {
@@ -276,6 +329,28 @@ func (c *compiler) returnStatement() {
 		c.expression()
 		c.consumeSemicolon("Expect ';' after return value.")
 		c.emitBytes(opReturn)
+	}
+}
+
+func (c *compiler) labelStatement() {
+	label := c.current.literal
+	c.advance()
+	c.advance()
+	switch {
+	case c.match(tokenWhile):
+		c.whileStatement(label, false)
+	case c.match(tokenDo):
+		c.doStatement(label)
+	case c.match(tokenFor):
+		c.forStatement(label)
+	case c.match(tokenLeftBrace):
+		c.beginLoop(label, loopBlock)
+		c.beginScope()
+		c.block()
+		c.endScope()
+		c.endLoop()
+	default:
+		c.errorAtCurrent("wrong label target")
 	}
 }
 
@@ -312,7 +387,9 @@ func (c *compiler) precedence(prec precedence) {
 		ledFn(canAssign)
 	}
 
-	if canAssign && mapHas(assignTokens, c.current.tokenType) {
+	if mapHas(incTokens, c.current.tokenType) {
+		c.errorAtPrevious("Invalid postincrement target.")
+	} else if canAssign && mapHas(assignTokens, c.current.tokenType) {
 		c.errorAtPrevious("Invalid assignment target.")
 	}
 }
@@ -323,6 +400,11 @@ var assignTokens = map[tokenType]empty{
 	tokenMinusEqual: {},
 	tokenStarEqual:  {},
 	tokenSlashEqual: {},
+}
+
+var incTokens = map[tokenType]empty{
+	tokenPlusPlus:   {},
+	tokenMinusMinus: {},
 }
 
 func (c *compiler) nud() parseFn {
@@ -423,10 +505,11 @@ func (c *compiler) parseTable(canAssign bool) {
 		for {
 			if c.match(tokenDot) {
 				c.consumeIdentifierConstant("identifier expected")
+				name := c.previous.literal
 				if c.match(tokenEqual) {
 					c.expressionComma()
 				} else if c.match(tokenLeftParen) {
-					c.function()
+					c.function(name)
 				} else {
 					c.namedVariable(c.previous.literal, false)
 				}
@@ -454,31 +537,37 @@ func (c *compiler) parseTable(canAssign bool) {
 
 func (c *compiler) parseFunction(canAssign bool) {
 	c.consume(tokenLeftParen, "'(' expected")
-	c.function()
+	c.function("")
 }
 
-func (c *compiler) function() bool {
-	fc := c.newFunctionCompiler(fnTypeSync)
+func (c *compiler) function(name string) bool {
+	fc := c.newFunctionCompiler(fnTypeSync, name)
 
 	fc.parameterList()
 
 	isArrow := false
-	fc.consume(tokenLeftBrace, "Expect '{' before function body.")
-	fc.block()
-	fc.emitReturn()
+	if fc.match(tokenEqualRightAngle) {
+		isArrow = true
+		fc.expressionComma()
+		fc.emitBytes(opReturn)
+	} else {
+		fc.consume(tokenLeftBrace, "Expect '{' before function body.")
+		fc.block()
+		fc.emitReturn()
+	}
 
 	c.emitConstant(fc.fn)
-
 	return isArrow
 }
 
 func (c *compiler) parsePrefix(canAssign bool) {
 	opType := c.previous.tokenType
+	prefixLen := len(c.prefix)
 	switch opType {
 	case tokenPlusPlus:
-		c.prefix = 1
+		slicePush(&c.prefix, true)
 	case tokenMinusMinus:
-		c.prefix = -1
+		slicePush(&c.prefix, false)
 	}
 	c.precedence(precUn)
 	switch opType {
@@ -491,7 +580,10 @@ func (c *compiler) parsePrefix(canAssign bool) {
 	case tokenTypeOf:
 		c.emitBytes(opTypeOf)
 	case tokenPlusPlus, tokenMinusMinus:
-		/* pass */
+		if prefixLen < len(c.prefix) {
+			c.prefix = nil
+			c.errorAtPrevious("invalid preincrement target")
+		}
 	default:
 		panic(unreachable)
 	}
@@ -518,6 +610,8 @@ func (c *compiler) led() parseFn {
 		return c.parseKey
 	case tokenDot:
 		return c.parseDot
+	case tokenMinusRightAngle:
+		return c.parseArrow
 	default:
 		panic(unreachable)
 	}
@@ -611,11 +705,20 @@ func (c *compiler) parseDot(canAssign bool) {
 	)
 }
 
+func (c *compiler) parseArrow(canAssign bool) {
+	c.emitBytes(opDup)
+	c.consumeIdentifierConstant("agagagagagga")
+	c.emitBytes(opLoadKey, opSwap)
+	c.consume(tokenLeftParen, "'('")
+	argCount := c.argumentList()
+	c.emitBytes(opCall, argCount+1)
+}
+
 /* == utilities ============================================================= */
 
 func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
-	if c.prefix != 0 && precedences[c.current.tokenType] <= precUn {
-		if c.prefix > 0 {
+	if len(c.prefix) != 0 && precedences[c.current.tokenType] <= precUn {
+		if slicePop(&c.prefix) {
 			getNoPop()
 			c.emitNumber(1)
 			c.emitBytes(opAdd)
@@ -626,7 +729,6 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 			c.emitBytes(opSub)
 			set()
 		}
-		c.prefix = 0
 	} else if c.match(tokenPlusPlus) {
 		getNoPop()
 		c.emitBytes(opStoreTemp)
@@ -704,7 +806,7 @@ func (c *compiler) declareName() {
 			break
 		}
 		if local.name == name {
-			c.errorAtPrevious("Already a variable with this name in this scope.")
+			c.errorAtPrevious("variable already declared")
 		}
 	}
 
@@ -808,8 +910,8 @@ func (c *compiler) endScope() {
 	}
 }
 
-func (c *compiler) beginLoop() {
-	c.loop = &loop{len(c.fn.Code), nil, c.loop}
+func (c *compiler) beginLoop(label string, loopType loopType) {
+	c.loop = &loop{label, loopType, len(c.fn.Code), nil, c.loop}
 }
 
 func (c *compiler) endLoop() {
@@ -909,15 +1011,17 @@ var precedences = map[tokenType]precedence{
 	tokenStar:  precFact,
 	tokenSlash: precFact,
 
-	tokenLeftParen:   precCall,
-	tokenLeftBracket: precCall,
-	tokenDot:         precCall,
+	tokenLeftParen:       precCall,
+	tokenLeftBracket:     precCall,
+	tokenDot:             precCall,
+	tokenMinusRightAngle: precCall,
 }
 
 /* == token reader ========================================================== */
 
 type tokenReader struct {
 	scanner
+	next     token
 	current  token
 	previous token
 	hadError bool
@@ -926,6 +1030,7 @@ type tokenReader struct {
 
 func newTokenReader(source []byte) *tokenReader {
 	p := &tokenReader{scanner: newScanner(source)}
+	p.advance()
 	p.advance()
 	return p
 }
@@ -959,12 +1064,13 @@ func (r *tokenReader) errorAtCurrent(message string) {
 
 func (r *tokenReader) advance() {
 	r.previous = r.current
+	r.current = r.next
 	for {
-		r.current = r.scanner.scan()
-		if r.current.tokenType != tokenError {
+		r.next = r.scanner.scan()
+		if r.next.tokenType != tokenError {
 			break
 		}
-		r.errorAtCurrent(r.current.literal)
+		r.errorAt(&r.next, r.next.literal)
 	}
 }
 
@@ -984,6 +1090,10 @@ func (r *tokenReader) ignoreNewLine() { r.match(tokenNewLine) }
 
 func (r *tokenReader) check(t tokenType) bool {
 	return r.current.tokenType == t
+}
+
+func (r *tokenReader) checkNext(t tokenType) bool {
+	return r.next.tokenType == t
 }
 
 func (r *tokenReader) match(t tokenType) bool {
@@ -1031,7 +1141,17 @@ type localVariable struct {
 	isInitialized bool
 }
 
+type loopType int
+
+const (
+	loopLoop loopType = iota
+	loopBlock
+	loopSwitch
+)
+
 type loop struct {
+	label string
+	loopType
 	start     int
 	breaks    []int
 	enclosing *loop

@@ -7,6 +7,5 @@ int main(int argc, char** argv) {
   } else if (argc == 2 && strcmp(argv[1], "--help") == 0) {
     printf("Usage: eule [script]\n");
   }
-  int a = 0;
   return 0;
 }

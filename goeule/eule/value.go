@@ -58,6 +58,7 @@ type Function struct {
 	Constants []Value
 	Lines     []int
 	Arity     int
+	Name      string
 }
 
 func (f *Function) addConstant(constant Value) int {
@@ -75,15 +76,18 @@ func (f *Function) writeCode(code uint8, line int) {
 	f.Lines = append(f.Lines, line)
 }
 
-func NewFunction() *Function {
-	return &Function{}
+func NewFunction(name string) *Function {
+	return &Function{Name: name}
 }
 
 type Native func(vm *VM, values []Value) Value
 
 func nativePrint(vm *VM, values []Value) Value {
-	for _, value := range values {
+	for i, value := range values {
 		fmt.Printf("%v", value)
+		if i != len(values)-1 {
+			fmt.Print(" ")
+		}
 	}
 	fmt.Println()
 	return Nihil{}
@@ -97,15 +101,15 @@ func (v Nihil) String() string     { return nihilLiteral }
 func (v Boolean) String() string   { return strconv.FormatBool(bool(v)) }
 func (v Number) String() string    { return formatNumber(v) }
 func (v String) String() string    { return string(v) }
-func (v *Table) String() string    { return fmt.Sprintf("<table %p>", v) }
-func (v *Function) String() string { return fmt.Sprintf("<fn %p>", v) }
-func (v Native) String() string    { return fmt.Sprintf("<fn %p>", v) }
+func (v *Table) String() string    { return "<table>" /* formatTable(v) */ }
+func (v *Function) String() string { return fmt.Sprintf("<fn %s>", v.Name) }
+func (v Native) String() string    { return "<native fn>" }
 
 func (v Nihil) toString() String     { return String(v.String()) }
 func (v Boolean) toString() String   { return String(v.String()) }
 func (v Number) toString() String    { return String(v.String()) }
 func (v String) toString() String    { return String(v.String()) }
-func (v *Table) toString() String    { return String(v.String()) }
+func (v *Table) toString() String    { return "<table>" }
 func (v *Function) toString() String { return String(v.String()) }
 func (v Native) toString() String    { return String(v.String()) }
 
@@ -127,17 +131,17 @@ func typeOf(v Value) String {
 	case Nihil:
 		return nihilLiteral
 	case Boolean:
-		return "bool"
+		return "boolean"
 	case Number:
-		return "num"
+		return "number"
 	case String:
-		return "str"
+		return "string"
 	case *Table:
-		return "tbl"
+		return "table"
 	case *Function:
-		return "fn"
+		return "function"
 	case Native:
-		return "fn"
+		return "function"
 	default:
 		panic(unreachable)
 	}

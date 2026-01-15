@@ -97,6 +97,9 @@ func (vm *VM) run() error {
 			vm.pop()
 		case opDup:
 			vm.push(vm.peek(0))
+		case opSwap:
+			vm.stack[vm.st-1], vm.stack[vm.st-2] =
+				vm.stack[vm.st-2], vm.stack[vm.st-1]
 		case opNihil:
 			vm.push(Nihil{})
 		case opFalse:
@@ -177,7 +180,9 @@ func (vm *VM) run() error {
 			} else if num1, num2, ok := assertValues[Number](v1, v2); ok {
 				vm.push(num1 + num2)
 			} else {
-				return vm.runtimeError("Operands must be two numbers or two strings.")
+				return vm.runtimeError(
+					"Operands must be two numbers or two strings.",
+				)
 			}
 		case opLt, opLe, opSub, opMul, opDiv:
 			v2 := vm.pop()

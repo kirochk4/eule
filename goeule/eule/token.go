@@ -25,6 +25,9 @@ const (
 	tokenPlusPlus   tokenType = "++"
 	tokenMinusMinus tokenType = "--"
 
+	tokenMinusRightAngle tokenType = "->"
+	tokenEqualRightAngle tokenType = "=>"
+
 	tokenPlus  tokenType = "+"
 	tokenMinus tokenType = "-"
 	tokenStar  tokenType = "*"
@@ -46,8 +49,6 @@ const (
 	tokenDotDotDot tokenType = "..."
 
 	tokenIdentifier tokenType = "identifier"
-	tokenFalse      tokenType = "false"
-	tokenTrue       tokenType = "true"
 	tokenNumber     tokenType = "number"
 	tokenString     tokenType = "string"
 
@@ -55,6 +56,8 @@ const (
 	tokenVariable tokenType = "variable"
 	tokenFunction tokenType = "function"
 
+	tokenFalse    tokenType = "false"
+	tokenTrue     tokenType = "true"
 	tokenIf       tokenType = "if"
 	tokenElse     tokenType = "else"
 	tokenWhile    tokenType = "while"
@@ -63,6 +66,16 @@ const (
 	tokenBreak    tokenType = "break"
 	tokenContinue tokenType = "continue"
 	tokenReturn   tokenType = "return"
+	tokenSwitch   tokenType = "switch"
+	tokenCase     tokenType = "case"
+	tokenDefault  tokenType = "default"
+	tokenAnd      tokenType = "and"
+	tokenOr       tokenType = "or"
+	tokenNot      tokenType = "not"
+	tokenUnless   tokenType = "unless"
+	tokenUntil    tokenType = "until"
+	tokenForEach  tokenType = "foreach"
+	tokenThen     tokenType = "then"
 
 	tokenTypeOf tokenType = "typeof"
 

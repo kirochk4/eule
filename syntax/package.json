@@ -1,15 +1,12 @@
 {
-  "name": "eule-language",
-  "displayName": "Eule Language",
-  "description": "Syntax highlighting for Eule programming language",
+  "name": "eule",
+  "displayName": "eule",
+  "description": "eule programming language",
   "version": "0.0.0",
   "publisher": "",
   "engines": {
     "vscode": "^1.60.0"
   },
-  "categories": [
-    "Programming Languages"
-  ],
   "contributes": {
     "languages": [
       {
@@ -20,10 +17,15 @@
         ],
         "extensions": [
           ".eule",
-          ".eult",
           ".eul"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "configurationDefaults": {
+          "[eule]": {
+            "editor.tabSize": 2,
+            "editor.insertSpaces": true
+          }
+        }
       }
     ],
     "grammars": [

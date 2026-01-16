@@ -6,10 +6,10 @@ import re
 
 
 TEMP_NAME = "__test_build.exe"
-EXTS = ["eult"]
+EXTS = ["eul"]
 GO_WD = "./goeule"
 GO_MAIN = "."
-TEST_FOLDER = "../tests"
+TEST_FOLDER = "../tests/language"
 
 
 def read_out(file: pathlib.Path) -> list[str]:

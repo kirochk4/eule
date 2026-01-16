@@ -6,3 +6,24 @@
 |  `while (!condition)`   |      `until (condition)`      |
 |     `goto endloop`      |         `break loop`          |
 |    `// linecomment`     |        `# linecomment`        |
+
+#### function
+
+```eul
+let name() {}
+let name {}
+let name() => nil
+let name => nil
+
+def() {}
+def {}
+def() => nil
+def => nil
+
+let tbl = {
+  .prop() {},
+  .prop {},
+  .prop() => nil,
+  .prop => nil,
+}
+```

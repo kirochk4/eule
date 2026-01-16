@@ -17,6 +17,7 @@ const (
 
 const (
 	modeAutoSemicolons = true
+	modeBadLabels      = true
 )
 
 const (

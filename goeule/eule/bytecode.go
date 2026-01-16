@@ -41,6 +41,12 @@ const (
 	opMul
 	opDiv
 	opMod
+
+	opOr
+	opXor
+	opAnd
+	opRev
+
 	opEq
 	opLt
 	opLe
@@ -88,7 +94,8 @@ func printInstruction(f *Function, offset int) int {
 	case opPop, opDup, opSwap, opNihil, opFalse, opTrue, opTable, opAdd, opSub,
 		opMul, opDiv, opEq, opLt, opLe, opNot, opNeg, opPos, opTypeOf, opReturn,
 		opStoreTemp, opLoadTemp, opDefineKey, opStoreKey, opLoadKey,
-		opLoadKeyNoPop, opCloseUpvalue, opClosure, opMod:
+		opLoadKeyNoPop, opCloseUpvalue, opClosure, opMod,
+		opOr, opXor, opAnd, opRev:
 		return simpleInstruction(f, offset)
 	case opConstant, opDefineGlobal, opStoreGlobal,
 		opLoadGlobal:
@@ -173,11 +180,17 @@ var opNames = [...]string{
 	opClosure: "closure",
 	opTable:   "table",
 
-	opAdd:    "add",
-	opSub:    "sub",
-	opMul:    "mul",
-	opDiv:    "div",
-	opMod:    "mod",
+	opAdd: "add",
+	opSub: "sub",
+	opMul: "mul",
+	opDiv: "div",
+	opMod: "mod",
+
+	opOr:  "or",
+	opXor: "xor",
+	opAnd: "and",
+	opRev: "rev",
+
 	opEq:     "eq",
 	opLt:     "lt",
 	opLe:     "le",

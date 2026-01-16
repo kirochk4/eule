@@ -22,7 +22,7 @@ type String string
 
 type Table struct {
 	Pairs map[String]Value
-	Meta  *Table
+	Proto *Table
 }
 
 func (t *Table) Store(keyValue Value, value Value) Value {
@@ -33,6 +33,8 @@ func (t *Table) Store(keyValue Value, value Value) Value {
 func (t *Table) Load(keyValue Value) Value {
 	if value, ok := t.Pairs[keyValue.toString()]; ok {
 		return value
+	} else if t.Proto != nil {
+		return t.Proto.Load(keyValue)
 	}
 	return Nihil{}
 }
@@ -46,10 +48,10 @@ func (t *Table) Delete(keyValue Value) {
 	delete(t.Pairs, keyValue.toString())
 }
 
-func newTable(cap int, meta *Table) *Table {
+func newTable(cap int, proto *Table) *Table {
 	return &Table{
 		Pairs: make(map[String]Value, cap),
-		Meta:  meta,
+		Proto: proto,
 	}
 }
 
@@ -60,6 +62,7 @@ type Function struct {
 	Lines      []int       `json:"lines"`
 	Upvals     []compUpval `json:"upvalues"`
 	ParamCount int         `json:"parameters"`
+	Vararg     bool        `json:"vararg"`
 }
 
 func (f *Function) addConstant(constant Value) int {
@@ -84,7 +87,7 @@ func NewFunction(name string) *Function {
 	return &Function{Name: name}
 }
 
-type Native func(vm *VM, values []Value) Value
+type Native func(vm *VM, values []Value) (Value, error)
 
 type Closure struct {
 	fn     *Function
@@ -114,7 +117,7 @@ func (u *Upvalue) Load() Value {
 	}
 }
 
-func nativePrint(vm *VM, values []Value) Value {
+func nativePrint(vm *VM, values []Value) (Value, error) {
 	for i, value := range values {
 		fmt.Printf("%v", value)
 		if i != len(values)-1 {
@@ -122,23 +125,35 @@ func nativePrint(vm *VM, values []Value) Value {
 		}
 	}
 	fmt.Println()
-	return Nihil{}
+	return Nihil{}, nil
 }
 
-func nativeClock(vm *VM, values []Value) Value {
-	return Number(float64(time.Now().UnixNano()) / float64(time.Second))
+func nativeClock(vm *VM, values []Value) (Value, error) {
+	return Number(float64(time.Now().UnixNano()) / float64(time.Second)), nil
 }
 
-func nativeAssert(vm *VM, values []Value) Value {
+func nativeAssert(vm *VM, values []Value) (Value, error) {
 	if len(values) < 1 {
 		vm.runtimeError("assert condition required")
 	}
 	if values[0].toBoolean() {
-		return Nihil{}
+		return Nihil{}, nil
 	} else {
-		vm.runtimeError("assertion failed")
-		return Nihil{}
+		return Nihil{}, vm.runtimeError("assertion failed")
 	}
+}
+
+func nativeSetPrototype(vm *VM, values []Value) (Value, error) {
+	if len(values) < 2 {
+		vm.runtimeError("not enough arguments")
+	}
+	if tbl, ok := values[0].(*Table); ok {
+		if proto, ok := values[1].(*Table); ok {
+			tbl.Proto = proto
+			return tbl, nil
+		}
+	}
+	return Nihil{}, vm.runtimeError("wrong types")
 }
 
 func (v Nihil) String() string     { return nihilLiteral }
@@ -187,11 +202,21 @@ func typeOf(v Value) String {
 		return "table"
 	case *Function:
 		return "function"
+	case *Closure:
+		return "function"
 	case Native:
 		return "function"
 	default:
 		panic(unreachable)
 	}
+}
+
+func assertValue[T Value](v Value) (T, bool) {
+	va, isType1 := v.(T)
+	if !isType1 {
+		return zero[T](), false
+	}
+	return va, true
 }
 
 func assertValues[T Value](v1 Value, v2 Value) (T, T, bool) {
@@ -201,4 +226,17 @@ func assertValues[T Value](v1 Value, v2 Value) (T, T, bool) {
 		return zero[T](), zero[T](), false
 	}
 	return va1, va2, true
+}
+
+func toBitwise(val Value) uint64 {
+	switch val := val.(type) {
+	case nil:
+		return 0
+	case Boolean:
+		return uint64(boolToInt(bool(val)))
+	case Number:
+		return uint64(val)
+	default:
+		return 1
+	}
 }

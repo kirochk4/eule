@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 	"os"
 )
 
@@ -24,6 +25,11 @@ type callFrame struct {
 	cursor int
 	slots  int
 	upvals []*Upvalue
+}
+
+type protect struct {
+	cst int
+	st  int
 }
 
 func (f *callFrame) readByte() uint8 {
@@ -52,6 +58,7 @@ type VM struct {
 	st         int
 	Global     *Table
 	openUpvals *Upvalue
+	prot       []protect
 }
 
 func New() *VM {
@@ -63,6 +70,7 @@ func New() *VM {
 	vm.Global.Store(String("print"), Native(nativePrint))
 	vm.Global.Store(String("clock"), Native(nativeClock))
 	vm.Global.Store(String("assert"), Native(nativeAssert))
+	vm.Global.Store(String("proto"), Native(nativeSetPrototype))
 	return vm
 }
 
@@ -77,13 +85,17 @@ func (vm *VM) Interpret(source []byte) error {
 	}
 
 	vm.push(fn)
-	vm.callFunction(fn, 0)
+	vm.callFunction(fn, 0, nil)
 
 	return vm.run()
 }
 
+func (vm *VM) currentFrame() *callFrame {
+	return &vm.callStack[vm.cst-1]
+}
+
 func (vm *VM) run() error {
-	frame := &vm.callStack[vm.cst-1]
+	frame := vm.currentFrame()
 
 	for {
 		if debugTraceExecution {
@@ -232,6 +244,41 @@ func (vm *VM) run() error {
 					opNames[op], typeOf(v1), typeOf(v2),
 				)
 			}
+		case opOr:
+			v2 := vm.pop()
+			v1 := vm.pop()
+			if b1, b2, ok := assertValues[Boolean](v1, v2); ok {
+				vm.push(b1 || b2)
+			} else {
+				vm.push(Number(toBitwise(v1) | toBitwise(v2)))
+			}
+			panic(unreachable)
+		case opXor:
+			v2 := vm.pop()
+			v1 := vm.pop()
+			if b1, b2, ok := assertValues[Boolean](v1, v2); ok {
+				vm.push(b1 || b2)
+			} else {
+				vm.push(Number(toBitwise(v1) ^ toBitwise(v2)))
+			}
+			panic(unreachable)
+		case opAnd:
+			v2 := vm.pop()
+			v1 := vm.pop()
+			if b1, b2, ok := assertValues[Boolean](v1, v2); ok {
+				vm.push(b1 && b2)
+			} else {
+				vm.push(Number(toBitwise(v1) & toBitwise(v2)))
+			}
+			panic(unreachable)
+		case opRev:
+			v := vm.pop()
+			if b, ok := assertValue[Boolean](v); ok {
+				vm.push(!b)
+			} else {
+				vm.push(Number(bits.Reverse64(toBitwise(v))))
+			}
+			panic(unreachable)
 		case opNot:
 			vm.push(!vm.pop().toBoolean())
 		case opNeg:
@@ -275,7 +322,7 @@ func (vm *VM) run() error {
 			if err := vm.callValue(vm.peek(argCount), argCount); err != nil {
 				return err
 			}
-			frame = &vm.callStack[vm.cst-1]
+			frame = vm.currentFrame()
 
 		case opReturn:
 			result := vm.pop()
@@ -286,8 +333,11 @@ func (vm *VM) run() error {
 			if vm.cst == 0 {
 				return nil
 			}
-			frame = &vm.callStack[vm.cst-1]
+			frame = vm.currentFrame()
+		default:
+			panic(unreachable)
 		}
+
 	}
 }
 
@@ -325,53 +375,72 @@ func (vm *VM) closeUpvalues(locOfLast int) {
 func (vm *VM) callValue(value Value, argCount int) error {
 	switch callee := value.(type) {
 	case *Closure:
-		return vm.callClosure(callee, argCount)
+		return vm.callFunction(callee.fn, argCount, callee.upvals)
 	case *Function:
-		return vm.callFunction(callee, argCount)
+		return vm.callFunction(callee, argCount, nil)
 	case Native:
 		return vm.callNative(callee, argCount)
 	default:
 		return vm.runtimeError(
-			"%s is not callable", value,
+			"%s is not callable", typeOf(value),
 		)
 	}
 }
 
-func (vm *VM) balanceArguments(argCount, paramCount int) {
-	if argCount < paramCount {
+func (vm *VM) balanceArguments(argCount, paramCount int, vararg bool) {
+	var tbl *Table
+	if vararg {
+		paramCount--
+	}
+
+	if argCount <= paramCount {
 		for range paramCount - argCount {
 			vm.push(Nihil{})
 		}
-	} else if argCount > paramCount {
-		vm.st -= argCount - paramCount
+		if vararg {
+			tbl = newTable(0, nil)
+			tbl.Store(String("length"), Number(0))
+		}
+	} else {
+		shift := argCount - paramCount
+		if vararg {
+			tbl = newTable(shift, nil)
+			for i := range shift {
+				tbl.Store(Number(i), vm.peek(shift-i-1))
+			}
+			tbl.Store(String("length"), Number(shift))
+		}
+		vm.st -= shift
+	}
+
+	if vararg {
+		vm.push(tbl)
 	}
 }
 
-func (vm *VM) callClosure(cls *Closure, argCount int) error {
-	vm.balanceArguments(argCount, cls.fn.ParamCount)
+func (vm *VM) callFunction(
+	fn *Function,
+	argCount int,
+	upvals []*Upvalue,
+) error {
 	if vm.cst == framesMax {
 		return vm.runtimeError("stack overflow")
 	}
-	vm.callStack[vm.cst] = callFrame{cls.fn, 0, vm.st - argCount, cls.upvals}
+	vm.callStack[vm.cst] = callFrame{fn, 0, vm.st - argCount, upvals}
 	vm.cst++
-	return nil
-}
-
-func (vm *VM) callFunction(fn *Function, argCount int) error {
-	vm.balanceArguments(argCount, fn.ParamCount)
-	if vm.cst == framesMax {
-		return vm.runtimeError("stack overflow")
-	}
-	vm.callStack[vm.cst] = callFrame{fn, 0, vm.st - argCount, nil}
-	vm.cst++
+	vm.balanceArguments(argCount, fn.ParamCount, fn.Vararg)
 	return nil
 }
 
 func (vm *VM) callNative(fn Native, argCount int) error {
 	args := vm.stack[vm.st-argCount : vm.st]
 	vm.st = vm.st - argCount - 1
-	vm.push(fn(vm, args))
-	return nil
+	if val, err := fn(vm, args); err != nil {
+		return err
+	} else {
+		vm.push(val)
+		return nil
+	}
 }
 
 func (vm *VM) push(value Value) {
@@ -388,19 +457,21 @@ func (vm *VM) peek(distance int) Value {
 	return vm.stack[vm.st-1-distance]
 }
 
-func (vm *VM) unwind(format string, a ...any) (error, bool) {
-	for vm.cst != 0 {
-		/* frame := vm.callStack[vm.cst-1] */
-		if false /* frame is protected */ {
-			vm.push(String(fmt.Sprintf(format, a...)))
-			return nil, false
-		}
-		vm.cst--
+func (vm *VM) unwind(errValue Value) bool {
+	if len(vm.prot) != 0 {
+		prot := slicePop(&vm.prot)
+		vm.st, vm.cst = prot.st, prot.cst
+		vm.push(errValue)
+		return true
 	}
-	return vm.runtimeError(format, a...), true
+	return false
 }
 
 func (vm *VM) runtimeError(format string, a ...any) error {
+	if vm.unwind(String(fmt.Sprintf(format, a...))) {
+		return nil
+	}
+
 	fmt.Fprint(os.Stderr, "runtime error: ")
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 

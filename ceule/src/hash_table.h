@@ -5,7 +5,7 @@
 #include "value.h"
 
 typedef struct {
-  ObjectString* key;
+  String* key;
   Value value;
 } Pair;
 
@@ -16,8 +16,8 @@ typedef PairBuffer HashTable;
 inline void initHashTable(HashTable* hashTable) { initPairBuffer(hashTable); }
 inline void freeHashTable(HashTable* hashTable) { freePairBuffer(hashTable); }
 
-bool hashTableSet(HashTable* hashTable, ObjectString* key, Value value);
-bool hashTableGet(HashTable* hashTable, ObjectString* key, Value* value);
-bool hashTableDelete(HashTable* hashTable, ObjectString* key);
+bool hashTableSet(HashTable* hashTable, String* key, Value value);
+bool hashTableGet(HashTable* hashTable, String* key, Value* value);
+bool hashTableDelete(HashTable* hashTable, String* key);
 
 #endif  // HASH_TABLE_H

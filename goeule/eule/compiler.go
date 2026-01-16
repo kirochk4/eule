@@ -109,7 +109,9 @@ func (c *compiler) variableDeclaration() {
 		if c.match(tokenEqual) {
 			c.expressionComma()
 			needSemicolon = true
-		} else if c.match(tokenLeftParen) {
+		} else if c.check(tokenLeftParen) ||
+			c.check(tokenEqualRightAngle) ||
+			c.check(tokenLeftBrace) {
 			isArrow := c.function(name)
 			needSemicolon = isArrow
 		} else {
@@ -298,7 +300,8 @@ func (c *compiler) forEachStatement(label string) {
 }
 
 func (c *compiler) breakStatement() {
-	if c.match(tokenIdentifier) {
+	if !c.matchSemicolon() {
+		c.consume(tokenIdentifier)
 		label := c.previous.literal
 		loop := c.loop
 		for loop != nil {
@@ -323,15 +326,20 @@ func (c *compiler) breakStatement() {
 		return
 	}
 end:
-	c.consumeSemicolon()
+	c.consumeEnd()
 }
 
 func (c *compiler) continueStatement() {
-	if c.match(tokenIdentifier) {
+	if !c.matchSemicolon() {
+		c.consume(tokenIdentifier)
 		label := c.previous.literal
 		loop := c.loop
 		for loop != nil {
 			if loop.label == label {
+				if loop.loopType != loopLoop {
+					c.errorAtPrevious("continue non loop label")
+					return
+				}
 				c.emitJumpBack(c.loop.start)
 				goto end
 			}
@@ -352,7 +360,7 @@ func (c *compiler) continueStatement() {
 		return
 	}
 end:
-	c.consumeSemicolon()
+	c.consumeEnd()
 }
 
 func (c *compiler) returnStatement() {
@@ -360,11 +368,11 @@ func (c *compiler) returnStatement() {
 		c.errorAtPrevious("'return' outside function")
 	}
 
-	if c.match(tokenSemicolon) {
+	if c.matchSemicolon() {
 		c.emitReturn()
 	} else {
 		c.expression()
-		c.consumeSemicolon()
+		c.consumeEnd()
 		c.emit(opReturn)
 	}
 }
@@ -389,13 +397,17 @@ func (c *compiler) labelStatement() {
 		c.endScope()
 		c.endLoop()
 	default:
-		c.errorAtCurrent("bad label")
+		if modeBadLabels {
+			c.errorAtCurrent("bad label")
+		} else {
+			c.statement()
+		}
 	}
 }
 
 func (c *compiler) expressionStatement() {
 	c.expression()
-	c.consumeExpressionEnd()
+	c.consumeEnd()
 	c.emit(opPop)
 }
 
@@ -563,7 +575,9 @@ func (c *compiler) parseTable(canAssign bool) {
 				name := c.previous.literal
 				if c.match(tokenEqual) {
 					c.expressionComma()
-				} else if c.match(tokenLeftParen) {
+				} else if c.check(tokenLeftParen) ||
+					c.check(tokenEqualRightAngle) ||
+					c.check(tokenLeftBrace) {
 					c.function(name)
 				} else {
 					c.namedVariable(c.previous.literal, false)
@@ -591,14 +605,15 @@ func (c *compiler) parseTable(canAssign bool) {
 }
 
 func (c *compiler) parseFunction(canAssign bool) {
-	c.consume(tokenLeftParen)
 	c.function("")
 }
 
 func (c *compiler) function(name string) bool {
 	fc := c.newFunctionCompiler(fnTypeSync, name)
 
-	fc.parameterList()
+	if fc.match(tokenLeftParen) {
+		fc.parameterList()
+	}
 
 	isArrow := false
 	if fc.match(tokenEqualRightAngle) {
@@ -854,10 +869,10 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 
 func (c *compiler) declareVariable() uint8 {
 	c.consume(tokenIdentifier)
-	c.declareName()
 	if c.scope == 0 {
 		return c.makeConstant(String(c.previous.literal))
 	} else {
+		c.declareLocalVariable()
 		return 0
 	}
 }
@@ -866,15 +881,11 @@ func (c *compiler) defineVariable(nameIndex uint8) {
 	if c.scope == 0 {
 		c.emit(opDefineGlobal, nameIndex)
 	} else {
-		c.markInitialized()
+		c.markLastInitialized()
 	}
 }
 
-func (c *compiler) declareName() {
-	if c.scope == 0 {
-		return
-	}
-
+func (c *compiler) declareLocalVariable() {
 	name := c.previous.literal
 	for i := len(c.locals) - 1; i >= 0; i-- {
 		local := &c.locals[i]
@@ -890,10 +901,6 @@ func (c *compiler) declareName() {
 }
 
 func (c *compiler) addLocal(name string) {
-	if c.scope == 0 {
-		return
-	}
-
 	if len(c.locals) == uint8Count {
 		c.errorAtPrevious("variables overflow (256)")
 	}
@@ -916,11 +923,7 @@ func (c *compiler) addUpval(index int, isLocal bool) int {
 	return len(c.fn.Upvals) - 1
 }
 
-func (c *compiler) markInitialized() {
-	if c.scope == 0 {
-		return
-	}
-
+func (c *compiler) markLastInitialized() {
 	c.locals[len(c.locals)-1].isInitialized = true
 }
 
@@ -1046,12 +1049,15 @@ func (c *compiler) parameterList() {
 			if c.fn.ParamCount > 255 {
 				c.errorAtCurrent("parameters overflow (255)")
 			}
+			if c.match(tokenDotDotDot) {
+				c.fn.Vararg = true
+			}
 			parameterIndex := c.declareVariable()
 			c.defineVariable(parameterIndex)
 			if !c.match(tokenComma) {
 				break
 			}
-			if c.check(tokenRightParen) {
+			if c.check(tokenRightParen) || c.fn.Vararg {
 				break
 			}
 		}
@@ -1142,7 +1148,7 @@ func (r *tokenReader) errorAt(token *token, message string) {
 	if !r.hadError {
 		fmt.Fprint(os.Stderr, "compile error: ")
 	} else {
-		fmt.Fprint(os.Stderr, "  ")
+		fmt.Fprint(os.Stderr, "  also ")
 	}
 	fmt.Fprintf(os.Stderr, "ln %d: %s", token.line, message)
 
@@ -1196,7 +1202,15 @@ func (r *tokenReader) consumeSemicolon() {
 	}
 }
 
-func (r *tokenReader) consumeExpressionEnd() {
+func (r *tokenReader) matchSemicolon() bool {
+	if modeAutoSemicolons {
+		return r.match(tokenNewLine) || r.match(tokenSemicolon)
+	} else {
+		return r.match(tokenSemicolon)
+	}
+}
+
+func (r *tokenReader) consumeEnd() {
 	if modeAutoSemicolons {
 		_ = r.match(tokenNewLine) || r.match(tokenSemicolon)
 	} else {

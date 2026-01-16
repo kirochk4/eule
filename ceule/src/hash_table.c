@@ -4,9 +4,7 @@
 
 DEFINE_BUFFER(Pair, Pair)
 
-
-
-bool hashTableSet(HashTable* hashTable, ObjectString* key, Value value) {
+bool hashTableSet(HashTable* hashTable, String* key, Value value) {
   Pair* tombstone = NULL;
 
   for (int i = 0; i < hashTable->length; i++) {
@@ -38,7 +36,7 @@ bool hashTableSet(HashTable* hashTable, ObjectString* key, Value value) {
   return false;
 }
 
-bool hashTableGet(HashTable* hashTable, ObjectString* key, Value* value) {
+bool hashTableGet(HashTable* hashTable, String* key, Value* value) {
   for (int i = 0; i < hashTable->length; i++) {
     Pair* pair = &hashTable->data[i];
     if (pair->key == key) {
@@ -49,7 +47,7 @@ bool hashTableGet(HashTable* hashTable, ObjectString* key, Value* value) {
   return false;
 }
 
-bool hashTableDelete(HashTable* hashTable, ObjectString* key) {
+bool hashTableDelete(HashTable* hashTable, String* key) {
   for (int i = 0; i < hashTable->length; i++) {
     Pair* pair = &hashTable->data[i];
     if (pair->key == key) {
@@ -64,7 +62,7 @@ bool hashTableDelete(HashTable* hashTable, ObjectString* key) {
 
 #define HASH_TABLE_MAX_LOAD 0.8
 
-static Pair* findPair(Pair* pairs, int capacity, ObjectString* key) {
+static Pair* findPair(Pair* pairs, int capacity, String* key) {
   uint32_t hashIndex = key->hash % capacity;
 
   Pair* tombstone = NULL;
@@ -107,7 +105,7 @@ static void adjustCapacity(HashTable* hashTable, int newCapacity) {
   hashTable->capacity = newCapacity;
 }
 
-bool hashTableSet(HashTable* hashTable, ObjectString* key, Value value) {
+bool hashTableSet(HashTable* hashTable, String* key, Value value) {
   if (hashTable->length + 1 > HASH_TABLE_MAX_LOAD * hashTable->capacity)
     adjustCapacity(hashTable, GROW_CAPACITY(hashTable->capacity));
 
@@ -122,7 +120,7 @@ bool hashTableSet(HashTable* hashTable, ObjectString* key, Value value) {
   return isNew;
 }
 
-bool hashTableGet(HashTable* hashTable, ObjectString* key, Value* value) {
+bool hashTableGet(HashTable* hashTable, String* key, Value* value) {
   if (hashTable->length == 0) return false;
 
   Pair* pair = findPair(hashTable->data, hashTable->capacity, key);
@@ -132,7 +130,7 @@ bool hashTableGet(HashTable* hashTable, ObjectString* key, Value* value) {
   return true;
 }
 
-bool hashTableDelete(HashTable* hashTable, ObjectString* key) {
+bool hashTableDelete(HashTable* hashTable, String* key) {
   if (hashTable->length == 0) return false;
 
   Pair* pair = findPair(hashTable->data, hashTable->capacity, key);

@@ -261,6 +261,7 @@ var solo = map[byte]tokenType{
 	'-': tokenMinus,
 	'*': tokenStar,
 	'/': tokenSlash,
+	'%': tokenPercent,
 }
 
 var duo = map[[2]byte]tokenType{
@@ -279,6 +280,7 @@ var duo = map[[2]byte]tokenType{
 	{'-', '='}: tokenMinusEqual,
 	{'*', '='}: tokenStarEqual,
 	{'/', '='}: tokenSlashEqual,
+	{'%', '='}: tokenPercentEqual,
 
 	{'|', '|'}: tokenPipePipe,
 	{'&', '&'}: tokenAmperAmper,
@@ -286,6 +288,9 @@ var duo = map[[2]byte]tokenType{
 
 var trio = map[[3]byte]tokenType{
 	{'.', '.', '.'}: tokenDotDotDot,
+
+	{'|', '|', '='}: tokenPipePipeEqual,
+	{'&', '&', '='}: tokenAmperAmperEqual,
 }
 
 var keywords = map[string]tokenType{

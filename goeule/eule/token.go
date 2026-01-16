@@ -28,15 +28,17 @@ const (
 	tokenMinusRightAngle tokenType = "->"
 	tokenEqualRightAngle tokenType = "=>"
 
-	tokenPlus  tokenType = "+"
-	tokenMinus tokenType = "-"
-	tokenStar  tokenType = "*"
-	tokenSlash tokenType = "/"
+	tokenPlus    tokenType = "+"
+	tokenMinus   tokenType = "-"
+	tokenStar    tokenType = "*"
+	tokenSlash   tokenType = "/"
+	tokenPercent tokenType = "%"
 
-	tokenPlusEqual  tokenType = "+="
-	tokenMinusEqual tokenType = "-="
-	tokenStarEqual  tokenType = "*="
-	tokenSlashEqual tokenType = "/="
+	tokenPlusEqual    tokenType = "+="
+	tokenMinusEqual   tokenType = "-="
+	tokenStarEqual    tokenType = "*="
+	tokenSlashEqual   tokenType = "/="
+	tokenPercentEqual tokenType = "%="
 
 	tokenEqualEqual      tokenType = "=="
 	tokenBangEqual       tokenType = "!="
@@ -45,6 +47,9 @@ const (
 
 	tokenPipePipe   tokenType = "||"
 	tokenAmperAmper tokenType = "&&"
+
+	tokenPipePipeEqual   tokenType = "||"
+	tokenAmperAmperEqual tokenType = "&&"
 
 	tokenDotDotDot tokenType = "..."
 

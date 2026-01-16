@@ -118,18 +118,18 @@ func (vm *VM) run() error {
 			fn := vm.pop().(*Function)
 			cls := &Closure{fn, nil}
 			vm.push(cls)
-			for _, upval := range fn.upvals {
-				if upval.isLocal {
+			for _, upval := range fn.Upvals {
+				if upval.IsLocal {
 					cls.upvals = append(
 						cls.upvals,
-						vm.captureUpvalue(frame.slots+int(upval.index)),
+						vm.captureUpvalue(frame.slots+int(upval.Index)),
 					)
 				} else {
-					cls.upvals = append(cls.upvals, frame.upvals[upval.index])
+					cls.upvals = append(cls.upvals, frame.upvals[upval.Index])
 				}
 			}
 		case opCloseUpvalue:
-			vm.closeUpvalues(vm.st-1)
+			vm.closeUpvalues(vm.st - 1)
 			vm.pop()
 		case opStoreUpvalue:
 			index := int(frame.readByte())
@@ -220,7 +220,7 @@ func (vm *VM) run() error {
 					"attempt to add %s and %s", typeOf(v1), typeOf(v2),
 				)
 			}
-		case opLt, opLe, opSub, opMul, opDiv:
+		case opLt, opLe, opSub, opMul, opDiv, opMod:
 			v2 := vm.pop()
 			v1 := vm.pop()
 			if num1, num2, ok := assertValues[Number](v1, v2); ok {
@@ -343,7 +343,7 @@ func (vm *VM) balanceArguments(argCount, paramCount int) {
 }
 
 func (vm *VM) callClosure(cls *Closure, argCount int) error {
-	vm.balanceArguments(argCount, cls.fn.paramCount)
+	vm.balanceArguments(argCount, cls.fn.ParamCount)
 	if vm.cst == framesMax {
 		return vm.runtimeError("stack overflow")
 	}
@@ -353,7 +353,7 @@ func (vm *VM) callClosure(cls *Closure, argCount int) error {
 }
 
 func (vm *VM) callFunction(fn *Function, argCount int) error {
-	vm.balanceArguments(argCount, fn.paramCount)
+	vm.balanceArguments(argCount, fn.ParamCount)
 	if vm.cst == framesMax {
 		return vm.runtimeError("stack overflow")
 	}
@@ -383,6 +383,18 @@ func (vm *VM) peek(distance int) Value {
 	return vm.stack[vm.st-1-distance]
 }
 
+func (vm *VM) unwind(format string, a ...any) (error, bool) {
+	for vm.cst != 0 {
+		/* frame := vm.callStack[vm.cst-1] */
+		if false /* frame is protected */ {
+			vm.push(String(fmt.Sprintf(format, a...)))
+			return nil, false
+		}
+		vm.cst--
+	}
+	return vm.runtimeError(format, a...), true
+}
+
 func (vm *VM) runtimeError(format string, a ...any) error {
 	fmt.Fprint(os.Stderr, "runtime error: ")
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
@@ -404,4 +416,5 @@ var numOps = map[uint8]func(a, b Number) Value{
 	opSub: func(a, b Number) Value { return a - b },
 	opMul: func(a, b Number) Value { return a * b },
 	opDiv: func(a, b Number) Value { return a / b },
+	opMod: func(a, b Number) Value { return mod(a, b) },
 }

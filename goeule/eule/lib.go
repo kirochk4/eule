@@ -88,7 +88,7 @@ func formatNumber(num Number) string {
 			return "-inf"
 		}
 	} else {
-		return strconv.FormatFloat(float64(num), 'f', -1, 64)
+		return strconv.FormatFloat(float64(num), 'f', 8, 64)
 	}
 }
 
@@ -107,6 +107,12 @@ func formatTable(tbl *Table) string {
 	}
 	str.WriteString(" }")
 	return str.String()
+}
+
+func mod(a, b Number) Number {
+	an, bn := float64(a), float64(b)
+	mod := math.Mod(an, bn)
+	return Number(mod)
 }
 
 func zero[T any]() (t T) { return }

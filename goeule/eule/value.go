@@ -54,12 +54,12 @@ func newTable(cap int, meta *Table) *Table {
 }
 
 type Function struct {
-	Name       string
-	Code       []uint8
-	Constants  []Value
-	Lines      []int
-	upvals     []compUpval
-	paramCount int
+	Name       string      `json:"name"`
+	Code       []uint8     `json:"code"`
+	Constants  []Value     `json:"constants"`
+	Lines      []int       `json:"lines"`
+	Upvals     []compUpval `json:"upvalues"`
+	ParamCount int         `json:"parameters"`
 }
 
 func (f *Function) addConstant(constant Value) int {

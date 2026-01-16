@@ -579,7 +579,7 @@ func (c *compiler) function(name string) bool {
 	}
 
 	c.emitConstant(fc.fn)
-	if len(fc.fn.upvals) != 0 {
+	if len(fc.fn.Upvals) != 0 {
 		c.emit(opClosure)
 	}
 	return isArrow
@@ -618,7 +618,8 @@ func (c *compiler) led() parseFn {
 	switch c.previous.tokenType {
 	case tokenComma:
 		return c.parseComma
-	case tokenPlus, tokenMinus, tokenStar, tokenSlash,
+	case tokenPlus, tokenMinus,
+		tokenStar, tokenSlash, tokenPercent,
 		tokenEqualEqual, tokenBangEqual,
 		tokenLeftAngle, tokenLeftAngleEqual,
 		tokenRightAngle, tokenRightAngleEqual:
@@ -671,6 +672,8 @@ func (c *compiler) parseInfix(canAssign bool) {
 		c.emit(opMul)
 	case tokenSlash:
 		c.emit(opDiv)
+	case tokenPercent:
+		c.emit(opMod)
 	default:
 		panic(unreachable)
 	}
@@ -795,6 +798,19 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 			c.expression()
 			c.emit(opDiv)
 			set()
+		case c.match(tokenPercentEqual):
+			getNoPop()
+			c.expression()
+			c.emit(opMod)
+			set()
+		case c.match(tokenPipePipeEqual):
+			getNoPop()
+			c.parseOr(false)
+			set()
+		case c.match(tokenAmperAmperEqual):
+			getNoPop()
+			c.parseAnd(false)
+			set()
 		default:
 			get()
 		}
@@ -852,19 +868,19 @@ func (c *compiler) addLocal(name string) {
 }
 
 func (c *compiler) addUpval(index int, isLocal bool) int {
-	for i := len(c.fn.upvals) - 1; i >= 0; i-- {
-		if c.fn.upvals[i].index == uint8(index) &&
-			c.fn.upvals[i].isLocal == isLocal {
+	for i := len(c.fn.Upvals) - 1; i >= 0; i-- {
+		if c.fn.Upvals[i].Index == uint8(index) &&
+			c.fn.Upvals[i].IsLocal == isLocal {
 			return i
 		}
 	}
 
-	if len(c.fn.upvals) == uint8Count {
+	if len(c.fn.Upvals) == uint8Count {
 		c.errorAtPrevious("upvalues overflow (256)")
 	}
 
-	c.fn.upvals = append(c.fn.upvals, compUpval{isLocal, uint8(index)})
-	return len(c.fn.upvals) - 1
+	c.fn.Upvals = append(c.fn.Upvals, compUpval{isLocal, uint8(index)})
+	return len(c.fn.Upvals) - 1
 }
 
 func (c *compiler) markInitialized() {
@@ -993,8 +1009,8 @@ func (c *compiler) argumentList() uint8 {
 func (c *compiler) parameterList() {
 	if !c.check(tokenRightParen) {
 		for {
-			c.fn.paramCount++
-			if c.fn.paramCount > 255 {
+			c.fn.ParamCount++
+			if c.fn.ParamCount > 255 {
 				c.errorAtCurrent("parameters overflow (255)")
 			}
 			parameterIndex := c.declareVariable()
@@ -1057,8 +1073,9 @@ var precedences = map[tokenType]precedence{
 	tokenPlus:  precTerm,
 	tokenMinus: precTerm,
 
-	tokenStar:  precFact,
-	tokenSlash: precFact,
+	tokenStar:    precFact,
+	tokenSlash:   precFact,
+	tokenPercent: precFact,
 
 	tokenLeftParen:       precCall,
 	tokenLeftBracket:     precCall,
@@ -1202,8 +1219,8 @@ var safeTokens = map[tokenType]empty{
 /* == additional ============================================================ */
 
 type compUpval struct {
-	isLocal bool
-	index   uint8
+	IsLocal bool  `json:"is_local"`
+	Index   uint8 `json:"index"`
 }
 
 type parseFn func(canAssign bool)

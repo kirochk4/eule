@@ -62,6 +62,7 @@ func New() *VM {
 	}
 	vm.Global.Store(String("print"), Native(nativePrint))
 	vm.Global.Store(String("clock"), Native(nativeClock))
+	vm.Global.Store(String("assert"), Native(nativeAssert))
 	return vm
 }
 
@@ -134,7 +135,7 @@ func (vm *VM) run() error {
 		case opStoreUpvalue:
 			index := int(frame.readByte())
 			upval := frame.upvals[index]
-			upval.Store(vm.pop())
+			upval.Store(vm.peek(0))
 		case opLoadUpvalue:
 			index := int(frame.readByte())
 			upval := frame.upvals[index]
@@ -259,8 +260,12 @@ func (vm *VM) run() error {
 			frame.cursor += int(frame.readShort())
 		case opJumpIfFalse:
 			offset := int(frame.readShort())
-			condition := vm.peek(0).toBoolean()
-			if !condition {
+			if !vm.peek(0).toBoolean() {
+				frame.cursor += offset
+			}
+		case opJumpIfNihil:
+			offset := int(frame.readShort())
+			if isNihil(vm.peek(0)) {
 				frame.cursor += offset
 			}
 		case opJumpBack:

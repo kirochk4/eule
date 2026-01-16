@@ -84,6 +84,8 @@ func (c *compiler) statement() {
 		c.doStatement("")
 	case c.match(tokenFor):
 		c.forStatement("")
+	case c.match(tokenForEach):
+		c.forEachStatement("")
 	case c.match(tokenBreak):
 		c.breakStatement()
 	case c.match(tokenContinue):
@@ -266,6 +268,35 @@ func (c *compiler) forStatement(label string) {
 	c.endScope()
 }
 
+func (c *compiler) forEachStatement(label string) {
+	c.beginScope()
+
+	c.consume(tokenLeftParen)
+	c.addLocal("$iter")
+	c.defineVariable(c.declareVariable())
+
+	c.consume(tokenIn)
+	c.expression()
+
+	c.beginLoop(label, loopLoop)
+	loopStart := len(c.fn.Code)
+
+	c.emit(opDup, opCall, 0)
+	exitJump := c.emitJump(opJumpIfNihil)
+	c.consume(tokenRightParen)
+
+	c.ignoreNewLine()
+
+	c.statement()
+	c.emit(opPop)
+	c.emitJumpBack(loopStart)
+
+	c.patchJump(exitJump)
+
+	c.endLoop()
+	c.endScope()
+}
+
 func (c *compiler) breakStatement() {
 	if c.match(tokenIdentifier) {
 		label := c.previous.literal
@@ -349,6 +380,8 @@ func (c *compiler) labelStatement() {
 		c.doStatement(label)
 	case c.match(tokenFor):
 		c.forStatement(label)
+	case c.match(tokenForEach):
+		c.forEachStatement(label)
 	case c.match(tokenLeftBrace):
 		c.beginLoop(label, loopBlock)
 		c.beginScope()
@@ -776,31 +809,31 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 	} else if canAssign {
 		switch {
 		case c.match(tokenEqual):
-			c.expression()
+			c.expressionComma()
 			set()
 		case c.match(tokenPlusEqual):
 			getNoPop()
-			c.expression()
+			c.expressionComma()
 			c.emit(opAdd)
 			set()
 		case c.match(tokenMinusEqual):
 			getNoPop()
-			c.expression()
+			c.expressionComma()
 			c.emit(opSub)
 			set()
 		case c.match(tokenStarEqual):
 			getNoPop()
-			c.expression()
+			c.expressionComma()
 			c.emit(opMul)
 			set()
 		case c.match(tokenSlashEqual):
 			getNoPop()
-			c.expression()
+			c.expressionComma()
 			c.emit(opDiv)
 			set()
 		case c.match(tokenPercentEqual):
 			getNoPop()
-			c.expression()
+			c.expressionComma()
 			c.emit(opMod)
 			set()
 		case c.match(tokenPipePipeEqual):
@@ -1155,7 +1188,7 @@ func (r *tokenReader) consume(t tokenType) {
 
 func (r *tokenReader) consumeSemicolon() {
 	if modeAutoSemicolons {
-		if !r.match(tokenNewLine) {
+		if !r.match(tokenNewLine) && !r.match(tokenEof) {
 			r.consume(tokenSemicolon)
 		}
 	} else {

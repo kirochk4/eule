@@ -319,6 +319,7 @@ var keywords = map[string]tokenType{
 	"unless":  tokenUnless,
 	"until":   tokenUntil,
 	"foreach": tokenForEach,
+	"in":      tokenIn,
 	"then":    tokenThen,
 
 	"typeof": tokenTypeOf,

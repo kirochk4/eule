@@ -1,0 +1,5 @@
+if (true) if (false) assert(false) else assert(true)
+if (false) if (true) assert(false) else assert(false)
+
+true then false then assert(false) else assert(true) else nil
+false then true then assert(false) else assert(false) else nil

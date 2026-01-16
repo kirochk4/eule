@@ -88,7 +88,7 @@ func formatNumber(num Number) string {
 			return "-inf"
 		}
 	} else {
-		return strconv.FormatFloat(float64(num), 'f', 8, 64)
+		return strconv.FormatFloat(float64(num), 'g', 8, 64)
 	}
 }
 

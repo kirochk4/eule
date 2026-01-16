@@ -1,4 +1,0 @@
-let a = "before"
-let c = a = "after"
-print(a) # out: after
-print(c) # out: after

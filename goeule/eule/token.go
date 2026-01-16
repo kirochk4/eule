@@ -80,6 +80,7 @@ const (
 	tokenUnless   tokenType = "unless"
 	tokenUntil    tokenType = "until"
 	tokenForEach  tokenType = "foreach"
+	tokenIn       tokenType = "in"
 	tokenThen     tokenType = "then"
 
 	tokenTypeOf tokenType = "typeof"

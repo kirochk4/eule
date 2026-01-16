@@ -51,6 +51,7 @@ const (
 
 	opJump
 	opJumpIfFalse
+	opJumpIfNihil
 	opJumpBack
 
 	opCall
@@ -95,7 +96,7 @@ func printInstruction(f *Function, offset int) int {
 	case opSmallInteger, opCall, opStoreLocal, opLoadLocal, opLoadUpvalue,
 		opStoreUpvalue:
 		return byteInstruction(f, offset)
-	case opJump, opJumpIfFalse, opJumpBack:
+	case opJump, opJumpIfFalse, opJumpIfNihil, opJumpBack:
 		sign := 1
 		if op == opJumpBack {
 			sign = -1
@@ -187,6 +188,7 @@ var opNames = [...]string{
 
 	opJump:        "jump",
 	opJumpIfFalse: "jump_if_false",
+	opJumpIfNihil: "jump_if_nihil",
 	opJumpBack:    "jump_back",
 
 	opCall:   "call",

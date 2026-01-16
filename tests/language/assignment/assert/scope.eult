@@ -1,0 +1,10 @@
+{
+  let a = "before"
+  assert(a == "before")
+
+  a = "after"
+  assert(a == "after")
+
+  assert((a = "arg") == "arg")
+  assert(a == "arg")
+}

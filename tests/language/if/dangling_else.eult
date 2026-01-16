@@ -1,5 +1,0 @@
-if (true) if (false) print("bad") else print("good") # out: good
-if (false) if (true) print("bad") else print("bad")
-
-true then false then print("bad") else print("good") else nil # out: good
-false then true then print("bad") else print("bad") else nil

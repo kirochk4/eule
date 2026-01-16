@@ -129,6 +129,18 @@ func nativeClock(vm *VM, values []Value) Value {
 	return Number(float64(time.Now().UnixNano()) / float64(time.Second))
 }
 
+func nativeAssert(vm *VM, values []Value) Value {
+	if len(values) < 1 {
+		vm.runtimeError("assert condition required")
+	}
+	if values[0].toBoolean() {
+		return Nihil{}
+	} else {
+		vm.runtimeError("assertion failed")
+		return Nihil{}
+	}
+}
+
 func (v Nihil) String() string     { return nihilLiteral }
 func (v Boolean) String() string   { return strconv.FormatBool(bool(v)) }
 func (v Number) String() string    { return formatNumber(v) }

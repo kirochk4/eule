@@ -48,8 +48,8 @@ const (
 	tokenPipePipe   tokenType = "||"
 	tokenAmperAmper tokenType = "&&"
 
-	tokenPipePipeEqual   tokenType = "||"
-	tokenAmperAmperEqual tokenType = "&&"
+	tokenPipePipeEqual   tokenType = "||="
+	tokenAmperAmperEqual tokenType = "&&="
 
 	tokenDotDotDot tokenType = "..."
 

@@ -164,8 +164,7 @@ func (c *compiler) ifStatement(reverse bool) {
 }
 
 func (c *compiler) whileStatement(label string, reverse bool) {
-	c.beginLoop(label, loopLoop)
-	loopStart := len(c.fn.Code)
+	loopStart := c.beginLoop(label, loopLoop)
 
 	c.consume(tokenLeftParen)
 	c.expressionAllowComma()
@@ -189,8 +188,7 @@ func (c *compiler) whileStatement(label string, reverse bool) {
 }
 
 func (c *compiler) doStatement(label string) {
-	c.beginLoop(label, loopLoop)
-	loopStart := len(c.fn.Code)
+	loopStart := c.beginLoop(label, loopLoop)
 
 	c.ignoreNewLine()
 	c.statement()
@@ -233,8 +231,7 @@ func (c *compiler) forStatement(label string) {
 		c.expressionStatement()
 	}
 
-	c.beginLoop(label, loopLoop)
-	loopStart := len(c.fn.Code)
+	loopStart := c.beginLoop(label, loopLoop)
 	exitJump := -1
 	if !c.match(tokenSemicolon) {
 		c.expressionAllowComma()
@@ -280,8 +277,7 @@ func (c *compiler) forEachStatement(label string) {
 	c.consume(tokenIn)
 	c.expression()
 
-	c.beginLoop(label, loopLoop)
-	loopStart := len(c.fn.Code)
+	loopStart := c.beginLoop(label, loopLoop)
 
 	c.emit(opDup, opCall, 0)
 	exitJump := c.emitJump(opJumpIfNihil)
@@ -1038,8 +1034,9 @@ func (c *compiler) endScope() {
 	}
 }
 
-func (c *compiler) beginLoop(label string, loopType loopType) {
+func (c *compiler) beginLoop(label string, loopType loopType) int {
 	c.loop = &loop{label, loopType, len(c.fn.Code), nil, c.loop}
+	return len(c.fn.Code)
 }
 
 func (c *compiler) endLoop() {

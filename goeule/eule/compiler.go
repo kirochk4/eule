@@ -107,7 +107,7 @@ func (c *compiler) variableDeclaration() {
 		nameIndex := c.declareVariable()
 		name := c.previous.literal
 		if c.match(tokenEqual) {
-			c.expressionComma()
+			c.expression()
 			needSemicolon = true
 		} else if c.check(tokenLeftParen) ||
 			c.check(tokenEqualRightAngle) ||
@@ -137,7 +137,7 @@ func (c *compiler) block() {
 
 func (c *compiler) ifStatement(reverse bool) {
 	c.consume(tokenLeftParen)
-	c.expression()
+	c.expressionAllowComma()
 	c.consume(tokenRightParen)
 
 	if reverse {
@@ -168,7 +168,7 @@ func (c *compiler) whileStatement(label string, reverse bool) {
 	loopStart := len(c.fn.Code)
 
 	c.consume(tokenLeftParen)
-	c.expression()
+	c.expressionAllowComma()
 	c.consume(tokenRightParen)
 
 	if reverse {
@@ -203,7 +203,7 @@ func (c *compiler) doStatement(label string) {
 	}
 	c.consume(tokenLeftParen)
 
-	c.expression()
+	c.expressionAllowComma()
 
 	if reverse {
 		c.emit(opNot)
@@ -237,7 +237,7 @@ func (c *compiler) forStatement(label string) {
 	loopStart := len(c.fn.Code)
 	exitJump := -1
 	if !c.match(tokenSemicolon) {
-		c.expression()
+		c.expressionAllowComma()
 		c.consumeSemicolon()
 
 		exitJump = c.emitJump(opJumpIfFalse)
@@ -247,7 +247,7 @@ func (c *compiler) forStatement(label string) {
 	if !c.match(tokenRightParen) {
 		bodyJump := c.emitJump(opJump)
 		incrementStart := len(c.fn.Code)
-		c.expression()
+		c.expressionAllowComma()
 		c.emit(opPop)
 		c.consume(tokenRightParen)
 
@@ -278,7 +278,7 @@ func (c *compiler) forEachStatement(label string) {
 	c.defineVariable(c.declareVariable())
 
 	c.consume(tokenIn)
-	c.expression()
+	c.expressionAllowComma()
 
 	c.beginLoop(label, loopLoop)
 	loopStart := len(c.fn.Code)
@@ -371,7 +371,7 @@ func (c *compiler) returnStatement() {
 	if c.matchSemicolon() {
 		c.emitReturn()
 	} else {
-		c.expression()
+		c.expressionAllowComma()
 		c.consumeEnd()
 		c.emit(opReturn)
 	}
@@ -406,18 +406,18 @@ func (c *compiler) labelStatement() {
 }
 
 func (c *compiler) expressionStatement() {
-	c.expression()
+	c.expressionAllowComma()
 	c.consumeEnd()
 	c.emit(opPop)
 }
 
 /* ==  expression =========================================================== */
 
-func (c *compiler) expression() {
+func (c *compiler) expressionAllowComma() {
 	c.precedence(precComma)
 }
 
-func (c *compiler) expressionComma() {
+func (c *compiler) expression() {
 	c.precedence(precAssign)
 }
 
@@ -483,7 +483,7 @@ func (c *compiler) nud() parseFn {
 }
 
 func (c *compiler) parseGroup(canAssign bool) {
-	c.expression()
+	c.expressionAllowComma()
 	c.consume(tokenRightParen)
 }
 
@@ -574,7 +574,7 @@ func (c *compiler) parseTable(canAssign bool) {
 				c.consumeIdentifierConstant()
 				name := c.previous.literal
 				if c.match(tokenEqual) {
-					c.expressionComma()
+					c.expression()
 				} else if c.check(tokenLeftParen) ||
 					c.check(tokenEqualRightAngle) ||
 					c.check(tokenLeftBrace) {
@@ -584,13 +584,13 @@ func (c *compiler) parseTable(canAssign bool) {
 				}
 				c.emit(opDefineKey)
 			} else if c.match(tokenLeftBracket) {
-				c.expression()
+				c.expressionAllowComma()
 				c.consume(tokenRightBracket)
 				c.consume(tokenEqual)
-				c.expressionComma()
+				c.expression()
 				c.emit(opDefineKey)
 			} else {
-				c.expressionComma()
+				c.expression()
 				if c.match(tokenDotDotDot) {
 					c.emit(opDefineKeySpread)
 				} else {
@@ -624,7 +624,7 @@ func (c *compiler) function(name string) bool {
 	isArrow := false
 	if fc.match(tokenEqualRightAngle) {
 		isArrow = true
-		fc.expressionComma()
+		fc.expression()
 		fc.emit(opReturn)
 	} else {
 		fc.consume(tokenLeftBrace)
@@ -699,7 +699,7 @@ func (c *compiler) led() parseFn {
 
 func (c *compiler) parseComma(canAssign bool) {
 	c.emit(opPop)
-	c.expression()
+	c.expressionAllowComma()
 }
 
 func (c *compiler) parseInfix(canAssign bool) {
@@ -752,14 +752,14 @@ func (c *compiler) parseAnd(canAssign bool) {
 func (c *compiler) parseTernary(canAssign bool) {
 	thenJump := c.emitJump(opJumpIfFalse)
 	c.emit(opPop)
-	c.expression()
+	c.expressionAllowComma()
 	elseJump := c.emitJump(opJump)
 	if !c.match(tokenElse) {
 		c.consume(tokenColon)
 	}
 	c.patchJump(thenJump)
 	c.emit(opPop)
-	c.expressionComma()
+	c.expression()
 	c.patchJump(elseJump)
 }
 
@@ -773,7 +773,7 @@ func (c *compiler) parseCall(canAssign bool) {
 }
 
 func (c *compiler) parseKey(canAssign bool) {
-	c.expression()
+	c.expressionAllowComma()
 	c.consume(tokenRightBracket)
 	c.assign(
 		func() { c.emit(opStoreKey) },
@@ -846,31 +846,31 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 	} else if canAssign {
 		switch {
 		case c.match(tokenEqual):
-			c.expressionComma()
+			c.expression()
 			set()
 		case c.match(tokenPlusEqual):
 			getNoPop()
-			c.expressionComma()
+			c.expression()
 			c.emit(opAdd)
 			set()
 		case c.match(tokenMinusEqual):
 			getNoPop()
-			c.expressionComma()
+			c.expression()
 			c.emit(opSub)
 			set()
 		case c.match(tokenStarEqual):
 			getNoPop()
-			c.expressionComma()
+			c.expression()
 			c.emit(opMul)
 			set()
 		case c.match(tokenSlashEqual):
 			getNoPop()
-			c.expressionComma()
+			c.expression()
 			c.emit(opDiv)
 			set()
 		case c.match(tokenPercentEqual):
 			getNoPop()
-			c.expressionComma()
+			c.expression()
 			c.emit(opMod)
 			set()
 		case c.match(tokenPipePipeEqual):
@@ -1048,7 +1048,7 @@ func (c *compiler) argumentList() (uint8, bool) {
 	isSpread := false
 	if !c.check(tokenRightParen) {
 		for {
-			c.expressionComma()
+			c.expression()
 			if argCount == 255 {
 				c.errorAtPrevious("arguments overflow (255)")
 			}

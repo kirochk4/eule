@@ -278,7 +278,7 @@ func (c *compiler) forEachStatement(label string) {
 	c.defineVariable(c.declareVariable())
 
 	c.consume(tokenIn)
-	c.expressionAllowComma()
+	c.expression()
 
 	c.beginLoop(label, loopLoop)
 	loopStart := len(c.fn.Code)
@@ -371,7 +371,7 @@ func (c *compiler) returnStatement() {
 	if c.matchSemicolon() {
 		c.emitReturn()
 	} else {
-		c.expressionAllowComma()
+		c.expression()
 		c.consumeEnd()
 		c.emit(opReturn)
 	}

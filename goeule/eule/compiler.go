@@ -759,7 +759,7 @@ func (c *compiler) parseTernary(canAssign bool) {
 	}
 	c.patchJump(thenJump)
 	c.emit(opPop)
-	c.expression()
+	c.expressionComma()
 	c.patchJump(elseJump)
 }
 

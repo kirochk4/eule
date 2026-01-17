@@ -145,7 +145,7 @@ func nativeAssert(vm *VM, values []Value) (Value, error) {
 
 func nativeSetPrototype(vm *VM, values []Value) (Value, error) {
 	if len(values) < 2 {
-		vm.runtimeError("not enough arguments")
+		return Nihil{}, vm.runtimeError("not enough arguments")
 	}
 	if tbl, ok := values[0].(*Table); ok {
 		if proto, ok := values[1].(*Table); ok {
@@ -161,7 +161,7 @@ func nativeSetPrototype(vm *VM, values []Value) (Value, error) {
 
 func nativeGetPrototype(vm *VM, values []Value) (Value, error) {
 	if len(values) < 1 {
-		vm.runtimeError("not enough arguments")
+		return Nihil{}, vm.runtimeError("not enough arguments")
 	}
 	if tbl, ok := values[0].(*Table); ok {
 		if tbl.Proto != nil {

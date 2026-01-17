@@ -199,17 +199,6 @@ func (vm *VM) run() error {
 				)
 			}
 			vm.push(table.Load(key))
-		case opLoadKeyNoPop:
-			key := vm.peek(0)
-			object := vm.peek(1)
-			table, ok := object.(*Table)
-			if !ok {
-				return vm.runtimeError(
-					"attempt to load key from %s",
-					typeOf(object),
-				)
-			}
-			vm.push(table.Load(key))
 		case opStoreLocal:
 			slot := int(frame.readByte())
 			vm.stack[frame.slots+slot] = vm.peek(0)
@@ -341,14 +330,14 @@ func (vm *VM) run() error {
 		case opCallSpread:
 			argCount := int(frame.readByte())
 
-			argCount--
 			spr := vm.pop()
 			switch spr := spr.(type) {
 			case Nihil:
 			case *Table:
 				if length, ok := spr.Load(magicLength).(Number); ok {
-					for i := range int64(length) {
-						vm.push(spr.Load(Number(i)))
+					var i Number
+					for i = 0; i < length; i++ {
+						vm.push(spr.Load(i))
 						argCount++
 					}
 				}
@@ -424,34 +413,31 @@ func (vm *VM) callValue(value Value, argCount int) error {
 	}
 }
 
-func (vm *VM) balanceArguments(argCount, paramCount int, vararg bool) {
-	var arg Value
-	if vararg {
-		paramCount--
-	}
+func (vm *VM) balanceArguments(argCount, paramCount int, hasVararg bool) {
+	var vararg Value
 
 	if argCount <= paramCount {
 		for range paramCount - argCount {
 			vm.push(Nihil{})
 		}
-		if vararg {
-			arg = Nihil{}
+		if hasVararg {
+			vararg = Nihil{}
 		}
 	} else {
 		shift := argCount - paramCount
-		if vararg {
+		if hasVararg {
 			tbl := newTable(shift+1, nil)
 			for i := range shift {
 				tbl.Store(Number(i), vm.peek(shift-i-1))
 			}
 			tbl.Store(magicLength, Number(shift))
-			arg = tbl
+			vararg = tbl
 		}
 		vm.st -= shift
 	}
 
-	if vararg {
-		vm.push(arg)
+	if hasVararg {
+		vm.push(vararg)
 	}
 }
 

@@ -7,11 +7,11 @@ from datetime import datetime
 
 
 TEMP_NAME = "__test_build.exe"
-BENCH_FOLDER = "../tests"
+BENCH_FOLDER = "../tests/benchmarks"
 RESULTS_DIR = "../benchmarks_results"
 RESULT_FILE = "result"
-FORMAT = "{}\npytime:\n{}\n\nprogram stdout:\n{}\n"
-EXTS = ["eulb"]
+FORMAT = "{}\ntime:\n{}\n\nstdout:\n{}\n"
+EXTS = ["eul"]
 GO_CWD = "./goeule"
 GO_MAIN = "."
 

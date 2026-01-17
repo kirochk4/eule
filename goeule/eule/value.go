@@ -22,6 +22,7 @@ type String string
 
 type Table struct {
 	Pairs map[String]Value
+	Len   int64
 	Proto *Table
 }
 

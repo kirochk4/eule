@@ -17,7 +17,6 @@ const (
 
 const (
 	modeAutoSemicolons = true
-	modeBadLabels      = true
 )
 
 const (
@@ -31,6 +30,10 @@ const (
 	nihilLiteral    = "nil"
 	variableLiteral = "let"
 	functionLiteral = "def"
+
+	fnMaxParams = 16 // must be < 256
+
+	useSmallInteger = false
 
 	magicLength String = "length"
 )
@@ -76,7 +79,7 @@ func boolToInt(b bool) int {
 	}
 }
 
-func IntToBool(i int) bool {
+func intToBool(i int) bool {
 	return i != 0
 }
 
@@ -91,7 +94,7 @@ func formatNumber(num Number) string {
 			return "-inf"
 		}
 	} else {
-		return strconv.FormatFloat(float64(num), 'g', 8, 64)
+		return strconv.FormatFloat(f, 'g', 8, 64)
 	}
 }
 
@@ -123,13 +126,6 @@ func zero[T any]() (t T) { return }
 func mapHas[T comparable, U any](m map[T]U, k T) bool {
 	_, ok := m[k]
 	return ok
-}
-
-func sliceLast[T any](s []T) (t T) {
-	if len(s) == 0 {
-		return
-	}
-	return s[len(s)-1]
 }
 
 func slicePop[T any](s *[]T) (t T) {

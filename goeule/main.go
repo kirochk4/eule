@@ -10,9 +10,15 @@ import (
 )
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "--help" {
-		showHelp()
-		return
+	if len(os.Args) == 2 {
+		switch os.Args[1] {
+		case "--help":
+			showHelp()
+			return
+		case "--version":
+			fmt.Printf("eule v%s\n", eule.Version)
+			return
+		}
 	}
 
 	var err error

@@ -12,7 +12,7 @@ const (
 	opFalse
 	opTrue
 
-	opSmallInteger // slow
+	opSmallInteger // slow?
 	opConstant
 
 	opStoreTemp
@@ -33,7 +33,6 @@ const (
 	opDefineKeySpread
 	opStoreKey
 	opLoadKey
-	opLoadKeyNoPop
 
 	opClosure
 	opTable
@@ -77,7 +76,7 @@ func printBytecode(f *Function) {
 }
 
 func printFunctionCode(f *Function) {
-	fmt.Println(coverString("function", 24, '='))
+	fmt.Println(coverString(f.Name, 24, '='))
 
 	for offset := 0; offset < len(f.Code); {
 		offset = printInstruction(f, offset)
@@ -97,7 +96,7 @@ func printInstruction(f *Function, offset int) int {
 	case opPop, opDup, opDupTwo, opSwap, opNihil, opFalse, opTrue, opTable,
 		opAdd, opSub, opMul, opDiv, opEq, opLt, opLe, opNot, opNeg, opPos,
 		opTypeOf, opReturn, opStoreTemp, opLoadTemp, opDefineKey, opStoreKey,
-		opLoadKey, opLoadKeyNoPop, opCloseUpvalue, opClosure, opMod,
+		opLoadKey, opCloseUpvalue, opClosure, opMod,
 		opOr, opXor, opAnd, opRev, opDefineKeySpread:
 		return simpleInstruction(f, offset)
 	case opConstant, opDefineGlobal, opStoreGlobal,

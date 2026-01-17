@@ -274,7 +274,7 @@ func (c *compiler) forEachStatement(label string) {
 	c.beginScope()
 
 	c.consume(tokenLeftParen)
-	c.addLocal("$iter")
+	c.addLocal("@")
 	c.defineVariable(c.declareVariable())
 
 	c.consume(tokenIn)
@@ -322,7 +322,7 @@ func (c *compiler) breakStatement() {
 			}
 			loop = loop.enclosing
 		}
-		c.errorAtPrevious("'break' outside loop")
+		c.errorAtPrevious("break outside loop")
 		return
 	}
 end:
@@ -340,7 +340,7 @@ func (c *compiler) continueStatement() {
 					c.errorAtPrevious("continue non loop label")
 					return
 				}
-				c.emitJumpBack(c.loop.start)
+				c.emitJumpBack(loop.start)
 				goto end
 			}
 			loop = loop.enclosing
@@ -351,12 +351,12 @@ func (c *compiler) continueStatement() {
 		loop := c.loop
 		for loop != nil {
 			if loop.loopType == loopLoop {
-				c.emitJumpBack(c.loop.start)
+				c.emitJumpBack(loop.start)
 				goto end
 			}
 			loop = loop.enclosing
 		}
-		c.errorAtPrevious("'continue' outside loop")
+		c.errorAtPrevious("continue outside loop")
 		return
 	}
 end:
@@ -365,7 +365,7 @@ end:
 
 func (c *compiler) returnStatement() {
 	if c.fnType == fnTypeScript {
-		c.errorAtPrevious("'return' outside function")
+		c.errorAtPrevious("return outside function")
 	}
 
 	if c.matchSemicolon() {
@@ -397,11 +397,7 @@ func (c *compiler) labelStatement() {
 		c.endScope()
 		c.endLoop()
 	default:
-		if modeBadLabels {
-			c.errorAtCurrent("bad label")
-		} else {
-			c.statement()
-		}
+		c.statement()
 	}
 }
 
@@ -615,7 +611,7 @@ func (c *compiler) parseFunction(canAssign bool) {
 }
 
 func (c *compiler) function(name string) bool {
-	fc := c.newFunctionCompiler(fnTypeSync, name)
+	fc := c.newFunctionCompiler(fnTypeDefault, name)
 
 	if fc.match(tokenLeftParen) {
 		fc.parameterList()
@@ -778,7 +774,7 @@ func (c *compiler) parseKey(canAssign bool) {
 	c.assign(
 		func() { c.emit(opStoreKey) },
 		func() { c.emit(opLoadKey) },
-		func() { c.emit(opLoadKeyNoPop) },
+		func() { c.emit(opDupTwo, opLoadKey) },
 		canAssign,
 	)
 }
@@ -788,7 +784,7 @@ func (c *compiler) parseDot(canAssign bool) {
 	c.assign(
 		func() { c.emit(opStoreKey) },
 		func() { c.emit(opLoadKey) },
-		func() { c.emit(opLoadKeyNoPop) },
+		func() { c.emit(opDupTwo, opLoadKey) },
 		canAssign,
 	)
 }
@@ -924,7 +920,9 @@ func (c *compiler) declareLocalVariable() {
 
 func (c *compiler) addLocal(name string) {
 	if len(c.locals) == uint8Count {
-		c.errorAtPrevious("variables overflow (256)")
+		c.errorAtPrevious(
+			fmt.Sprintf("too many variables (%d)", uint8Max),
+		)
 	}
 	c.locals = append(c.locals, localVar{name, c.scope, false, false})
 }
@@ -938,7 +936,9 @@ func (c *compiler) addUpval(index int, isLocal bool) int {
 	}
 
 	if len(c.fn.Upvals) == uint8Count {
-		c.errorAtPrevious("upvalues overflow (256)")
+		c.errorAtPrevious(
+			fmt.Sprintf("too many upvalues (%d)", uint8Max),
+		)
 	}
 
 	c.fn.Upvals = append(c.fn.Upvals, compUpval{isLocal, uint8(index)})
@@ -952,7 +952,9 @@ func (c *compiler) markLastInitialized() {
 func (c *compiler) makeConstant(value Value) uint8 {
 	index := c.fn.addConstant(value)
 	if index > int(uint8Max) {
-		c.errorAtPrevious("constants overflow (256)")
+		c.errorAtPrevious(
+			fmt.Sprintf("too many constants (%d)", uint8Max),
+		)
 		return 0
 	}
 	return uint8(index)
@@ -965,9 +967,13 @@ func (c *compiler) emit(b ...uint8) {
 }
 
 func (c *compiler) emitNumber(num float64) {
-	if 0 <= num && num <= float64(uint8Max) &&
-		math.Floor(num) == num {
-		c.emit(opSmallInteger, uint8(num))
+	if useSmallInteger {
+		if 0 <= num && num <= float64(uint8Max) &&
+			math.Floor(num) == num {
+			c.emit(opSmallInteger, uint8(num))
+		} else {
+			c.emitConstant(Number(num))
+		}
 	} else {
 		c.emitConstant(Number(num))
 	}
@@ -1049,12 +1055,15 @@ func (c *compiler) argumentList() (uint8, bool) {
 	if !c.check(tokenRightParen) {
 		for {
 			c.expression()
-			if argCount == 255 {
-				c.errorAtPrevious("arguments overflow (255)")
-			}
-			argCount++
 			if c.match(tokenDotDotDot) {
 				isSpread = true
+			} else {
+				argCount++
+			}
+			if argCount > fnMaxParams {
+				c.errorAtPrevious(
+					fmt.Sprintf("too many arguments (%d)", fnMaxParams),
+				)
 			}
 			if !c.match(tokenComma) {
 				break
@@ -1071,15 +1080,17 @@ func (c *compiler) argumentList() (uint8, bool) {
 func (c *compiler) parameterList() {
 	if !c.check(tokenRightParen) {
 		for {
-			c.fn.ParamCount++
-			if c.fn.ParamCount > 255 {
-				c.errorAtCurrent("parameters overflow (255)")
-			}
 			if c.match(tokenDotDotDot) {
 				c.fn.Vararg = true
+			} else {
+				c.fn.ParamCount++
 			}
-			parameterIndex := c.declareVariable()
-			c.defineVariable(parameterIndex)
+			if c.fn.ParamCount > fnMaxParams {
+				c.errorAtPrevious(
+					fmt.Sprintf("too many parameters (%d)", fnMaxParams),
+				)
+			}
+			c.defineVariable(c.declareVariable())
 			if !c.match(tokenComma) {
 				break
 			}
@@ -1266,7 +1277,8 @@ func (r *tokenReader) synchronize() {
 	r.panic = false
 
 	for r.current.tokenType != tokenEof {
-		if r.previous.tokenType == tokenSemicolon {
+		if r.previous.tokenType == tokenSemicolon ||
+			r.previous.tokenType == tokenNewLine {
 			return
 		}
 
@@ -1329,5 +1341,5 @@ type fnType int
 
 const (
 	fnTypeScript fnType = iota
-	fnTypeSync
+	fnTypeDefault
 )

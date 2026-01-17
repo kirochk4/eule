@@ -237,6 +237,7 @@ var insertNewLineAfter = map[tokenType]empty{
 	tokenNihil:        {},
 	tokenFalse:        {},
 	tokenTrue:         {},
+	tokenDotDotDot:    {},
 }
 
 var solo = map[byte]tokenType{

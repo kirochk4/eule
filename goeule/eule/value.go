@@ -151,9 +151,24 @@ func nativeSetPrototype(vm *VM, values []Value) (Value, error) {
 		if proto, ok := values[1].(*Table); ok {
 			tbl.Proto = proto
 			return tbl, nil
+		} else if isNihil(values[1]) {
+			tbl.Proto = nil
+			return tbl, nil
 		}
 	}
 	return Nihil{}, vm.runtimeError("wrong types")
+}
+
+func nativeGetPrototype(vm *VM, values []Value) (Value, error) {
+	if len(values) < 1 {
+		vm.runtimeError("not enough arguments")
+	}
+	if tbl, ok := values[0].(*Table); ok {
+		if tbl.Proto != nil {
+			return tbl.Proto, nil
+		}
+	}
+	return Nihil{}, nil
 }
 
 func (v Nihil) String() string     { return nihilLiteral }

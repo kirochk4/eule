@@ -3,6 +3,7 @@ package eule
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/bits"
 	"os"
@@ -70,7 +71,8 @@ func New() *VM {
 	vm.Global.Store(String("print"), Native(nativePrint))
 	vm.Global.Store(String("clock"), Native(nativeClock))
 	vm.Global.Store(String("assert"), Native(nativeAssert))
-	vm.Global.Store(String("proto"), Native(nativeSetPrototype))
+	vm.Global.Store(String("setPrototype"), Native(nativeSetPrototype))
+	vm.Global.Store(String("getPrototype"), Native(nativeGetPrototype))
 	return vm
 }
 
@@ -112,6 +114,9 @@ func (vm *VM) run() error {
 			vm.pop()
 		case opDup:
 			vm.push(vm.peek(0))
+		case opDupTwo:
+			vm.push(vm.peek(1))
+			vm.push(vm.peek(1))
 		case opSwap:
 			vm.stack[vm.st-1], vm.stack[vm.st-2] =
 				vm.stack[vm.st-2], vm.stack[vm.st-1]
@@ -161,6 +166,16 @@ func (vm *VM) run() error {
 			key := vm.pop()
 			table := vm.peek(0).(*Table)
 			table.Store(key, value)
+		case opDefineKeySpread:
+			spr := vm.pop()
+			table := vm.peek(0).(*Table)
+			switch spr := spr.(type) {
+			case Nihil:
+			case *Table:
+				maps.Copy(table.Pairs, spr.Pairs)
+			default:
+				return vm.runtimeError("attempt to spread %s", typeOf(spr))
+			}
 		case opStoreKey:
 			value := vm.pop()
 			key := vm.pop()
@@ -323,6 +338,28 @@ func (vm *VM) run() error {
 				return err
 			}
 			frame = vm.currentFrame()
+		case opCallSpread:
+			argCount := int(frame.readByte())
+
+			argCount--
+			spr := vm.pop()
+			switch spr := spr.(type) {
+			case Nihil:
+			case *Table:
+				if length, ok := spr.Load(magicLength).(Number); ok {
+					for i := range int64(length) {
+						vm.push(spr.Load(Number(i)))
+						argCount++
+					}
+				}
+			default:
+				return vm.runtimeError("attempt to spread %s", typeOf(spr))
+			}
+
+			if err := vm.callValue(vm.peek(argCount), argCount); err != nil {
+				return err
+			}
+			frame = vm.currentFrame()
 
 		case opReturn:
 			result := vm.pop()
@@ -388,7 +425,7 @@ func (vm *VM) callValue(value Value, argCount int) error {
 }
 
 func (vm *VM) balanceArguments(argCount, paramCount int, vararg bool) {
-	var tbl *Table
+	var arg Value
 	if vararg {
 		paramCount--
 	}
@@ -398,23 +435,23 @@ func (vm *VM) balanceArguments(argCount, paramCount int, vararg bool) {
 			vm.push(Nihil{})
 		}
 		if vararg {
-			tbl = newTable(0, nil)
-			tbl.Store(String("length"), Number(0))
+			arg = Nihil{}
 		}
 	} else {
 		shift := argCount - paramCount
 		if vararg {
-			tbl = newTable(shift, nil)
+			tbl := newTable(shift+1, nil)
 			for i := range shift {
 				tbl.Store(Number(i), vm.peek(shift-i-1))
 			}
-			tbl.Store(String("length"), Number(shift))
+			tbl.Store(magicLength, Number(shift))
+			arg = tbl
 		}
 		vm.st -= shift
 	}
 
 	if vararg {
-		vm.push(tbl)
+		vm.push(arg)
 	}
 }
 

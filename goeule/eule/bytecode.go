@@ -5,6 +5,7 @@ import "fmt"
 const (
 	opPop uint8 = iota
 	opDup
+	opDupTwo
 	opSwap
 
 	opNihil
@@ -29,6 +30,7 @@ const (
 	opLoadUpvalue
 
 	opDefineKey
+	opDefineKeySpread
 	opStoreKey
 	opLoadKey
 	opLoadKeyNoPop
@@ -61,6 +63,7 @@ const (
 	opJumpBack
 
 	opCall
+	opCallSpread
 	opReturn
 )
 
@@ -91,17 +94,17 @@ func printInstruction(f *Function, offset int) int {
 	}
 
 	switch op := f.Code[offset]; op {
-	case opPop, opDup, opSwap, opNihil, opFalse, opTrue, opTable, opAdd, opSub,
-		opMul, opDiv, opEq, opLt, opLe, opNot, opNeg, opPos, opTypeOf, opReturn,
-		opStoreTemp, opLoadTemp, opDefineKey, opStoreKey, opLoadKey,
-		opLoadKeyNoPop, opCloseUpvalue, opClosure, opMod,
-		opOr, opXor, opAnd, opRev:
+	case opPop, opDup, opDupTwo, opSwap, opNihil, opFalse, opTrue, opTable,
+		opAdd, opSub, opMul, opDiv, opEq, opLt, opLe, opNot, opNeg, opPos,
+		opTypeOf, opReturn, opStoreTemp, opLoadTemp, opDefineKey, opStoreKey,
+		opLoadKey, opLoadKeyNoPop, opCloseUpvalue, opClosure, opMod,
+		opOr, opXor, opAnd, opRev, opDefineKeySpread:
 		return simpleInstruction(f, offset)
 	case opConstant, opDefineGlobal, opStoreGlobal,
 		opLoadGlobal:
 		return constantInstruction(f, offset)
 	case opSmallInteger, opCall, opStoreLocal, opLoadLocal, opLoadUpvalue,
-		opStoreUpvalue:
+		opStoreUpvalue, opCallSpread:
 		return byteInstruction(f, offset)
 	case opJump, opJumpIfFalse, opJumpIfNihil, opJumpBack:
 		sign := 1
@@ -148,9 +151,10 @@ func jumpInstruction(f *Function, offset int, sign int) int {
 }
 
 var opNames = [...]string{
-	opPop:  "pop",
-	opDup:  "dup",
-	opSwap: "swap",
+	opPop:    "pop",
+	opDup:    "dup",
+	opDupTwo: "dup_two",
+	opSwap:   "swap",
 
 	opNihil: "nihil",
 	opFalse: "false",
@@ -173,9 +177,10 @@ var opNames = [...]string{
 	opStoreUpvalue: "store_upvalue",
 	opLoadUpvalue:  "load_upvalue",
 
-	opDefineKey: "define_key",
-	opStoreKey:  "store_key",
-	opLoadKey:   "load_key",
+	opDefineKey:       "define_key",
+	opDefineKeySpread: "define_key_spread",
+	opStoreKey:        "store_key",
+	opLoadKey:         "load_key",
 
 	opClosure: "closure",
 	opTable:   "table",
@@ -204,6 +209,7 @@ var opNames = [...]string{
 	opJumpIfNihil: "jump_if_nihil",
 	opJumpBack:    "jump_back",
 
-	opCall:   "call",
-	opReturn: "return",
+	opCall:       "call",
+	opCallSpread: "call_spread",
+	opReturn:     "return",
 }

@@ -582,17 +582,23 @@ func (c *compiler) parseTable(canAssign bool) {
 				} else {
 					c.namedVariable(c.previous.literal, false)
 				}
+				c.emit(opDefineKey)
 			} else if c.match(tokenLeftBracket) {
 				c.expression()
 				c.consume(tokenRightBracket)
 				c.consume(tokenEqual)
 				c.expressionComma()
+				c.emit(opDefineKey)
 			} else {
-				c.emitNumber(index)
-				index++
 				c.expressionComma()
+				if c.match(tokenDotDotDot) {
+					c.emit(opDefineKeySpread)
+				} else {
+					c.emitNumber(index)
+					index++
+					c.emit(opSwap, opDefineKey)
+				}
 			}
-			c.emit(opDefineKey)
 			if !c.match(tokenComma) {
 				break
 			}
@@ -758,8 +764,12 @@ func (c *compiler) parseTernary(canAssign bool) {
 }
 
 func (c *compiler) parseCall(canAssign bool) {
-	argCount := c.argumentList()
-	c.emit(opCall, argCount)
+	argCount, spread := c.argumentList()
+	if spread {
+		c.emit(opCallSpread, argCount)
+	} else {
+		c.emit(opCall, argCount)
+	}
 }
 
 func (c *compiler) parseKey(canAssign bool) {
@@ -787,9 +797,21 @@ func (c *compiler) parseArrow(canAssign bool) {
 	c.emit(opDup)
 	c.consumeIdentifierConstant()
 	c.emit(opLoadKey, opSwap)
-	c.consume(tokenLeftParen)
-	argCount := c.argumentList()
-	c.emit(opCall, argCount+1)
+	if c.match(tokenLeftParen) {
+		argCount, spread := c.argumentList()
+		if spread {
+			c.emit(opCallSpread, argCount+1)
+		} else {
+			c.emit(opCall, argCount+1)
+		}
+	} else {
+		c.assign(
+			func() { c.emit(opCall, 2) },
+			func() { c.emit(opCall, 1) },
+			func() { c.emit(opDupTwo, opCall, 1) },
+			canAssign,
+		)
+	}
 }
 
 /* == utilities ============================================================= */
@@ -1021,8 +1043,9 @@ func (c *compiler) endLoop() {
 	c.loop = c.loop.enclosing
 }
 
-func (c *compiler) argumentList() uint8 {
+func (c *compiler) argumentList() (uint8, bool) {
 	var argCount uint8 = 0
+	isSpread := false
 	if !c.check(tokenRightParen) {
 		for {
 			c.expressionComma()
@@ -1030,16 +1053,19 @@ func (c *compiler) argumentList() uint8 {
 				c.errorAtPrevious("arguments overflow (255)")
 			}
 			argCount++
+			if c.match(tokenDotDotDot) {
+				isSpread = true
+			}
 			if !c.match(tokenComma) {
 				break
 			}
-			if c.check(tokenRightParen) {
+			if c.check(tokenRightParen) || isSpread {
 				break
 			}
 		}
 	}
 	c.consume(tokenRightParen)
-	return argCount
+	return argCount, isSpread
 }
 
 func (c *compiler) parameterList() {

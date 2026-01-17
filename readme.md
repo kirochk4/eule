@@ -9,9 +9,12 @@ let iterate(a) {
 }
 
 let add(...a) {
+  unless (a) return 0
+
   let result = 0
   foreach (elem in iterate(a))
     result += elem
+
   return result
 }
 

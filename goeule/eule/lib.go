@@ -31,6 +31,8 @@ const (
 	nihilLiteral    = "nil"
 	variableLiteral = "let"
 	functionLiteral = "def"
+
+	magicLength String = "length"
 )
 
 type empty struct{}

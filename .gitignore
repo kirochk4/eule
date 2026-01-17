@@ -6,3 +6,5 @@ __pycache__
 !tests/**/*.eul
 
 benchmarks_results
+
+todo

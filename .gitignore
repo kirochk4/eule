@@ -4,6 +4,7 @@ __pycache__
 
 **/*.eul
 !tests/**/*.eul
+!**/include/**/*.eul
 
 benchmarks_results
 

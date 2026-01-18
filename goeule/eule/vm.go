@@ -1,6 +1,7 @@
 package eule
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"maps"
@@ -8,6 +9,9 @@ import (
 	"math/bits"
 	"os"
 )
+
+//go:embed include/include.eul
+var include []byte
 
 const (
 	framesMax int = 64
@@ -73,6 +77,7 @@ func New() *VM {
 	vm.Global.Store(String("assert"), Native(nativeAssert))
 	vm.Global.Store(String("setPrototype"), Native(nativeSetPrototype))
 	vm.Global.Store(String("getPrototype"), Native(nativeGetPrototype))
+	vm.Interpret(include)
 	return vm
 }
 

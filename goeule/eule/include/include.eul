@@ -1,0 +1,41 @@
+let Array = {
+  .push(self, val) => self[self.length++] = val,
+  .pop(self) => self[--self.length],
+
+  .iter(self) {
+    let i = 0
+    return def => self[i++]
+  },
+  .drain(self) => def => self->pop(),
+
+  .forEach(self, f) {
+    let prev
+    for (let i = 0; i < self.length; i++) {
+      let elem = self[i]
+      f(elem, i, prev)
+      prev = elem
+    }
+    return self
+  },
+  .filter(self, f) {
+    let arr = newArray(), prev
+    for (let i = 0; i < self.length; i++) {
+      let elem = self[i]
+      if (f(elem, i, prev))
+        arr->push(elem)
+      prev = elem
+    }
+    return arr
+  },
+  .map(self, f) {
+    let prev
+    for (let i = 0; i < self.length; i++) {
+      let elem = self[i]
+      self[i] = f(elem, i, prev)
+      prev = elem
+    }
+    return self
+  },
+}
+
+let newArray(...a) => setPrototype(a then a else { .length = 0 }, Array)

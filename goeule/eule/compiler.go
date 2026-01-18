@@ -464,6 +464,8 @@ func (c *compiler) nud() parseFn {
 		return c.parseString
 	case tokenLeftBrace:
 		return c.parseTable
+	case tokenLeftBracket:
+		return c.parseArray
 	case tokenFunction:
 		return c.parseFunction
 	case tokenPlus, tokenMinus, tokenBang, tokenTypeOf,
@@ -574,21 +576,21 @@ func (c *compiler) parseTable(canAssign bool) {
 				} else {
 					c.namedVariable(c.previous.literal, false)
 				}
-				c.emit(opDefineKey)
+				c.emit(opAddTableKey)
 			} else if c.match(tokenLeftBracket) {
 				c.expressionAllowComma()
 				c.consume(tokenRightBracket)
 				c.consume(tokenEqual)
 				c.expression()
-				c.emit(opDefineKey)
+				c.emit(opAddTableKey)
 			} else {
 				c.expression()
 				if c.match(tokenDotDotDot) {
-					c.emit(opDefineKeySpread)
+					c.emit(opAddTableSpread)
 				} else {
 					c.emitNumber(index)
 					index++
-					c.emit(opSwap, opDefineKey)
+					c.emit(opSwap, opAddTableKey)
 				}
 			}
 			if !c.match(tokenComma) {
@@ -600,6 +602,27 @@ func (c *compiler) parseTable(canAssign bool) {
 		}
 	}
 	c.consume(tokenRightBrace)
+}
+
+func (c *compiler) parseArray(canAssign bool) {
+	c.emit(opArray)
+	if !c.check(tokenRightBrace) {
+		for {
+			c.expression()
+			if c.match(tokenDotDotDot) {
+				c.emit(opAddArraySpread)
+			} else {
+				c.emit(opAddArrayElement)
+			}
+			if !c.match(tokenComma) {
+				break
+			}
+			if c.check(tokenRightBracket) {
+				break
+			}
+		}
+	}
+	c.consume(tokenRightBracket)
 }
 
 func (c *compiler) parseFunction(canAssign bool) {

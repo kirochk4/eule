@@ -29,13 +29,18 @@ const (
 	opStoreUpvalue
 	opLoadUpvalue
 
-	opDefineKey
-	opDefineKeySpread
 	opStoreKey
 	opLoadKey
 
 	opClosure
+
 	opTable
+	opAddTableKey
+	opAddTableSpread
+
+	opArray
+	opAddArrayElement
+	opAddArraySpread
 
 	opAdd
 	opSub
@@ -95,9 +100,10 @@ func printInstruction(f *Function, offset int) int {
 	switch op := f.Code[offset]; op {
 	case opPop, opDup, opDupTwo, opSwap, opNihil, opFalse, opTrue, opTable,
 		opAdd, opSub, opMul, opDiv, opEq, opLt, opLe, opNot, opNeg, opPos,
-		opTypeOf, opReturn, opStoreTemp, opLoadTemp, opDefineKey, opStoreKey,
+		opTypeOf, opReturn, opStoreTemp, opLoadTemp, opAddTableKey, opStoreKey,
 		opLoadKey, opCloseUpvalue, opClosure, opMod,
-		opOr, opXor, opAnd, opRev, opDefineKeySpread:
+		opOr, opXor, opAnd, opRev, opAddTableSpread, opAddArrayElement,
+		opAddArraySpread, opArray:
 		return simpleInstruction(f, offset)
 	case opConstant, opDefineGlobal, opStoreGlobal,
 		opLoadGlobal:
@@ -120,7 +126,7 @@ func constantInstruction(f *Function, offset int) int {
 	name := opNames[f.Code[offset]]
 	index := f.Code[offset+1]
 	fmt.Printf(
-		"%-16s |> %04d %-8v ",
+		"%-20s |> %04d %-8v ",
 		name,
 		index,
 		shortString(f.Constants[index].String(), 8),
@@ -130,14 +136,14 @@ func constantInstruction(f *Function, offset int) int {
 
 func simpleInstruction(f *Function, offset int) int {
 	name := opNames[f.Code[offset]]
-	fmt.Printf("%-16s |%16c", name, ' ')
+	fmt.Printf("%-20s |%16c", name, ' ')
 	return offset + 1
 }
 
 func byteInstruction(f *Function, offset int) int {
 	name := opNames[f.Code[offset]]
 	slot := f.Code[offset+1]
-	fmt.Printf("%-16s |> %04d%10c", name, slot, ' ')
+	fmt.Printf("%-20s |> %04d%10c", name, slot, ' ')
 	return offset + 2
 }
 
@@ -145,7 +151,7 @@ func jumpInstruction(f *Function, offset int, sign int) int {
 	name := opNames[f.Code[offset]]
 	jump := uint16(f.Code[offset+1]) << 8
 	jump |= uint16(f.Code[offset+2])
-	fmt.Printf("%-16s |> %04d >>> %04d ", name, offset, offset+3+sign*int(jump))
+	fmt.Printf("%-20s |> %04d >>> %04d ", name, offset, offset+3+sign*int(jump))
 	return offset + 3
 }
 
@@ -176,13 +182,18 @@ var opNames = [...]string{
 	opStoreUpvalue: "store_upvalue",
 	opLoadUpvalue:  "load_upvalue",
 
-	opDefineKey:       "define_key",
-	opDefineKeySpread: "define_key_spread",
-	opStoreKey:        "store_key",
-	opLoadKey:         "load_key",
+	opStoreKey: "store_key",
+	opLoadKey:  "load_key",
 
 	opClosure: "closure",
-	opTable:   "table",
+
+	opTable:          "table",
+	opAddTableKey:    "add_table_key",
+	opAddTableSpread: "add_table_spread",
+
+	opArray:           "array",
+	opAddArrayElement: "add_array_element",
+	opAddArraySpread:  "add_array_spread",
 
 	opAdd: "add",
 	opSub: "sub",

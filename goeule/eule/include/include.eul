@@ -1,5 +1,5 @@
-let Array = {
-  .push(self, val) => self[self.length++] = val,
+let __array = {
+  .push(self, v) => self[self.length++] = v,
   .pop(self) => self[--self.length],
 
   .iter(self) {
@@ -9,33 +9,33 @@ let Array = {
   .drain(self) => def => self->pop(),
 
   .forEach(self, f) {
-    let prev
+    let p
     for (let i = 0; i < self.length; i++) {
-      let elem = self[i]
-      f(elem, i, prev)
-      prev = elem
+      let e = self[i]
+      f(e, i, p)
+      p = e
     }
     return self
   },
   .filter(self, f) {
-    let arr = newArray(), prev
+    let a = newArray(), p
     for (let i = 0; i < self.length; i++) {
-      let elem = self[i]
-      if (f(elem, i, prev))
-        arr->push(elem)
-      prev = elem
+      let e = self[i]
+      if (f(e, i, p))
+        a->push(e)
+      p = e
     }
-    return arr
+    return a
   },
   .map(self, f) {
-    let prev
+    let p
     for (let i = 0; i < self.length; i++) {
-      let elem = self[i]
-      self[i] = f(elem, i, prev)
-      prev = elem
+      let e = self[i]
+      self[i] = f(e, i, p)
+      p = e
     }
     return self
   },
 }
 
-let newArray(...a) => setPrototype(a then a else { .length = 0 }, Array)
+let newArray(...a) => setPrototype(a then a else { .length = 0 }, __array)

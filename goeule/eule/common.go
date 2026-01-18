@@ -36,6 +36,9 @@ const (
 	useSmallInteger = false
 
 	magicLength String = "length"
+	magicArray String = "__array"
+
+	tableCapacity = 32
 )
 
 type empty struct{}

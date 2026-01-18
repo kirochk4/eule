@@ -16,8 +16,6 @@ var include []byte
 const (
 	framesMax int = 64
 	stackMax      = framesMax * uint8Count
-
-	globalInitCapacity = 8
 )
 
 var (
@@ -64,20 +62,24 @@ type VM struct {
 	Global     *Table
 	openUpvals *Upvalue
 	prot       []protect
+	arrayProto *Table
 }
 
 func New() *VM {
 	vm := &VM{
 		callStack: [framesMax]callFrame{},
 		stack:     [stackMax]Value{},
-		Global:    newTable(globalInitCapacity, nil),
+		Global:    newTable(tableCapacity, nil),
 	}
+
 	vm.Global.Store(String("print"), Native(nativePrint))
 	vm.Global.Store(String("clock"), Native(nativeClock))
 	vm.Global.Store(String("assert"), Native(nativeAssert))
 	vm.Global.Store(String("setPrototype"), Native(nativeSetPrototype))
 	vm.Global.Store(String("getPrototype"), Native(nativeGetPrototype))
+
 	vm.Interpret(include)
+	vm.arrayProto = vm.Global.Load(magicArray).(*Table)
 	return vm
 }
 
@@ -136,7 +138,38 @@ func (vm *VM) run() error {
 		case opConstant:
 			vm.push(frame.readConstant())
 		case opTable:
-			vm.push(newTable(0, nil))
+			vm.push(newTable(tableCapacity, nil))
+		case opArray:
+			array := newTable(tableCapacity, vm.arrayProto)
+			array.Store(magicLength, Number(0))
+			vm.push(array)
+		case opAddArrayElement:
+			array := vm.peek(1).(*Table)
+			oldLength := array.Load(magicLength).(Number)
+			newLength := oldLength + Number(1)
+			array.Store(oldLength, vm.pop())
+			array.Store(magicLength, newLength)
+		case opAddArraySpread:
+			array := vm.peek(1).(*Table)
+			oldLength := array.Load(magicLength).(Number)
+			newLength := oldLength
+
+			spr := vm.pop()
+			switch spr := spr.(type) {
+			case Nihil:
+			case *Table:
+				if length, ok := spr.Load(magicLength).(Number); ok {
+					var i Number
+					for i = 0; i < length; i++ {
+						array.Store(oldLength+i, spr.Load(i))
+					}
+					newLength = oldLength + length
+				}
+			default:
+				return vm.runtimeError("attempt to spread %s", typeOf(spr))
+			}
+
+			array.Store(magicLength, newLength)
 		case opClosure:
 			fn := vm.pop().(*Function)
 			cls := &Closure{fn, nil}
@@ -166,12 +199,12 @@ func (vm *VM) run() error {
 			vm.stack[frame.slots-1] = vm.peek(0)
 		case opLoadTemp:
 			vm.stack[vm.st-1] = vm.stack[frame.slots-1]
-		case opDefineKey:
+		case opAddTableKey:
 			value := vm.pop()
 			key := vm.pop()
 			table := vm.peek(0).(*Table)
 			table.Store(key, value)
-		case opDefineKeySpread:
+		case opAddTableSpread:
 			spr := vm.pop()
 			table := vm.peek(0).(*Table)
 			switch spr := spr.(type) {

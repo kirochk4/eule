@@ -280,7 +280,7 @@ func (c *compiler) forEachStatement(label string) {
 	loopStart := c.beginLoop(label, loopLoop)
 
 	c.emit(opDup, opCall, 0)
-	exitJump := c.emitJump(opJumpIfNihil)
+	exitJump := c.emitJump(opJumpIfDone)
 	c.consume(tokenRightParen)
 
 	c.ignoreNewLine()
@@ -367,7 +367,7 @@ func (c *compiler) returnStatement() {
 	if c.matchSemicolon() {
 		c.emitReturn()
 	} else {
-		c.expression()
+		c.expressionAllowComma()
 		c.consumeEnd()
 		c.emit(opReturn)
 	}
@@ -421,6 +421,7 @@ func (c *compiler) precedence(prec precedence) {
 		return
 	}
 
+	canPreInc := prec <= precUn
 	canAssign := prec <= precAssign
 	nudFn(canAssign)
 
@@ -430,7 +431,9 @@ func (c *compiler) precedence(prec precedence) {
 		ledFn(canAssign)
 	}
 
-	if mapHas(incTokens, c.current.tokenType) {
+	if canPreInc && precedences[c.current.tokenType] > precUn {
+		c.errorAtPrevious("invalid preincrement")
+	} else if mapHas(incTokens, c.current.tokenType) {
 		c.errorAtPrevious("invalid postincrement")
 	} else if canAssign && mapHas(assignTokens, c.current.tokenType) {
 		c.errorAtPrevious("invalid assignment")
@@ -606,7 +609,7 @@ func (c *compiler) parseTable(canAssign bool) {
 
 func (c *compiler) parseArray(canAssign bool) {
 	c.emit(opArray)
-	if !c.check(tokenRightBrace) {
+	if !c.check(tokenRightBracket) {
 		for {
 			c.expression()
 			if c.match(tokenDotDotDot) {
@@ -698,7 +701,7 @@ func (c *compiler) led() parseFn {
 	case tokenAmperAmper, tokenAnd:
 		return c.parseAnd
 	case tokenQuestion, tokenThen:
-		return c.parseTernary
+		return c.parseThen
 	case tokenLeftParen:
 		return c.parseCall
 	case tokenLeftBracket:
@@ -764,7 +767,7 @@ func (c *compiler) parseAnd(canAssign bool) {
 	c.patchJump(endJump)
 }
 
-func (c *compiler) parseTernary(canAssign bool) {
+func (c *compiler) parseThen(canAssign bool) {
 	thenJump := c.emitJump(opJumpIfFalse)
 	c.emit(opPop)
 	c.expressionAllowComma()

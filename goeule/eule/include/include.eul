@@ -2,11 +2,15 @@ let __array = {
   .push(self, v) => self[self.length++] = v,
   .pop(self) => self[--self.length],
 
-  .iter(self) {
+  .iterator(self) {
     let i = 0
-    return def => self[i++]
+    return def => i < self.length then
+      { .value = self[i++] } else
+      { .done = true }
   },
-  .drain(self) => def => self->pop(),
+  .drain(self) => def => self.length > 0 then
+    { .value = self->pop() } else 
+    { .done = true },
 
   .forEach(self, f) {
     let p
@@ -18,7 +22,7 @@ let __array = {
     return self
   },
   .filter(self, f) {
-    let a = newArray(), p
+    let a = [], p
     for (let i = 0; i < self.length; i++) {
       let e = self[i]
       if (f(e, i, p))
@@ -37,5 +41,3 @@ let __array = {
     return self
   },
 }
-
-let newArray(...a) => setPrototype(a then a else { .length = 0 }, __array)

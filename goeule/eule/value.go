@@ -14,16 +14,24 @@ type Value interface {
 
 type Nihil empty
 
+func (n Nihil) Load(keyValue Value) Value {
+	return Nihil{}
+}
+
 type Boolean bool
 
 type Number float64
 
 type String string
 
+type Proto interface {
+	Load(keyValue Value) Value
+	Value
+}
+
 type Table struct {
 	Pairs map[String]Value
-	Len   int64
-	Proto *Table
+	Proto
 }
 
 func (t *Table) Store(keyValue Value, value Value) Value {
@@ -34,10 +42,9 @@ func (t *Table) Store(keyValue Value, value Value) Value {
 func (t *Table) Load(keyValue Value) Value {
 	if value, ok := t.Pairs[keyValue.toString()]; ok {
 		return value
-	} else if t.Proto != nil {
+	} else {
 		return t.Proto.Load(keyValue)
 	}
-	return Nihil{}
 }
 
 func (t *Table) Has(keyValue Value) Boolean {
@@ -49,7 +56,10 @@ func (t *Table) Delete(keyValue Value) {
 	delete(t.Pairs, keyValue.toString())
 }
 
-func newTable(cap int, proto *Table) *Table {
+func newTable(cap int, proto Proto) *Table {
+	if proto == nil {
+		proto = Nihil{}
+	}
 	return &Table{
 		Pairs: make(map[String]Value, cap),
 		Proto: proto,
@@ -120,7 +130,7 @@ func (u *Upvalue) Load() Value {
 
 func nativePrint(vm *VM, values []Value) (Value, error) {
 	for i, value := range values {
-		fmt.Printf("%v", value)
+		fmt.Printf("%s", value)
 		if i != len(values)-1 {
 			fmt.Print(" ")
 		}
@@ -135,7 +145,7 @@ func nativeClock(vm *VM, values []Value) (Value, error) {
 
 func nativeAssert(vm *VM, values []Value) (Value, error) {
 	if len(values) < 1 {
-		vm.runtimeError("assert condition required")
+		return Nihil{}, vm.runtimeError("assert condition required")
 	}
 	if values[0].toBoolean() {
 		return Nihil{}, nil
@@ -149,11 +159,8 @@ func nativeSetPrototype(vm *VM, values []Value) (Value, error) {
 		return Nihil{}, vm.runtimeError("not enough arguments")
 	}
 	if tbl, ok := values[0].(*Table); ok {
-		if proto, ok := values[1].(*Table); ok {
+		if proto, ok := values[1].(Proto); ok {
 			tbl.Proto = proto
-			return tbl, nil
-		} else if isNihil(values[1]) {
-			tbl.Proto = nil
 			return tbl, nil
 		}
 	}
@@ -165,9 +172,7 @@ func nativeGetPrototype(vm *VM, values []Value) (Value, error) {
 		return Nihil{}, vm.runtimeError("not enough arguments")
 	}
 	if tbl, ok := values[0].(*Table); ok {
-		if tbl.Proto != nil {
-			return tbl.Proto, nil
-		}
+		return tbl.Proto, nil
 	}
 	return Nihil{}, nil
 }
@@ -176,7 +181,7 @@ func (v Nihil) String() string     { return nihilLiteral }
 func (v Boolean) String() string   { return strconv.FormatBool(bool(v)) }
 func (v Number) String() string    { return formatNumber(v) }
 func (v String) String() string    { return string(v) }
-func (v *Table) String() string    { return "<table>" /* formatTable(v) */ }
+func (v *Table) String() string    { return formatTable(v) }
 func (v *Function) String() string { return fmt.Sprintf("<fn %s>", v.Name) }
 func (v *Closure) String() string  { return v.fn.String() }
 func (v Native) String() string    { return "<native fn>" }

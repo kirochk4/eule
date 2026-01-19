@@ -36,7 +36,9 @@ const (
 	useSmallInteger = false
 
 	magicLength String = "length"
-	magicArray String = "__array"
+	magicArray  String = "__array"
+	magicValue  String = "value"
+	magicDone   String = "done"
 
 	tableCapacity = 32
 )
@@ -113,6 +115,7 @@ func formatTable(tbl *Table) string {
 		if i != len(tbl.Pairs)-1 {
 			str.WriteString(", ")
 		}
+		i++
 	}
 	str.WriteString(" }")
 	return str.String()

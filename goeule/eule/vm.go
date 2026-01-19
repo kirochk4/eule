@@ -352,11 +352,16 @@ func (vm *VM) run() error {
 			if !vm.peek(0).toBoolean() {
 				frame.cursor += offset
 			}
-		case opJumpIfNihil:
+		case opJumpIfDone:
 			offset := int(frame.readShort())
-			if isNihil(vm.peek(0)) {
-				frame.cursor += offset
+			obj := vm.pop()
+			if tbl, ok := obj.(*Table); ok {
+				if !tbl.Load(magicDone).toBoolean() {
+					vm.push(tbl.Load(magicValue))
+					break
+				}
 			}
+			frame.cursor += offset
 		case opJumpBack:
 			frame.cursor -= int(frame.readShort())
 		case opCall:

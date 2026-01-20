@@ -1,4 +1,0 @@
-let a = { [1] = 0 }
-let idx = 1
-print(a[idx--]++) # out: 0
-print(a[idx + 1]) # out: 1

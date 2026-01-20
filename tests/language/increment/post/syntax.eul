@@ -1,0 +1,16 @@
+let a = 0
+assert(a++ == 0)
+assert(a == 1)
+
+a = {
+  .b = 0,
+}
+assert(a.b++ == 0)
+assert(a.b == 1)
+
+let i = 0
+a = {
+  [0] = 0,
+}
+assert(a[i++]++ == 0)
+assert(a[i-1] == 1)

@@ -8,8 +8,7 @@ import (
 
 type Value interface {
 	fmt.Stringer
-	toString() String
-	toBoolean() Boolean
+	valueMark()
 }
 
 type Nihil empty
@@ -35,12 +34,12 @@ type Table struct {
 }
 
 func (t *Table) Store(keyValue Value, value Value) Value {
-	t.Pairs[keyValue.toString()] = value
+	t.Pairs[toString(keyValue)] = value
 	return value
 }
 
 func (t *Table) Load(keyValue Value) Value {
-	if value, ok := t.Pairs[keyValue.toString()]; ok {
+	if value, ok := t.Pairs[toString(keyValue)]; ok {
 		return value
 	} else {
 		return t.Proto.Load(keyValue)
@@ -48,12 +47,12 @@ func (t *Table) Load(keyValue Value) Value {
 }
 
 func (t *Table) Has(keyValue Value) Boolean {
-	_, ok := t.Pairs[keyValue.toString()]
+	_, ok := t.Pairs[toString(keyValue)]
 	return Boolean(ok)
 }
 
 func (t *Table) Delete(keyValue Value) {
-	delete(t.Pairs, keyValue.toString())
+	delete(t.Pairs, toString(keyValue))
 }
 
 func newTable(cap int, proto Proto) *Table {
@@ -98,7 +97,7 @@ func NewFunction(name string) *Function {
 	return &Function{Name: name}
 }
 
-type Native func(vm *VM, values []Value) (Value, error)
+type Native func(vm *VM, values []Value) (Value, Value)
 
 type Closure struct {
 	fn     *Function
@@ -128,7 +127,7 @@ func (u *Upvalue) Load() Value {
 	}
 }
 
-func nativePrint(vm *VM, values []Value) (Value, error) {
+func nativePrint(vm *VM, values []Value) (Value, Value) {
 	for i, value := range values {
 		fmt.Printf("%s", value)
 		if i != len(values)-1 {
@@ -139,24 +138,24 @@ func nativePrint(vm *VM, values []Value) (Value, error) {
 	return Nihil{}, nil
 }
 
-func nativeClock(vm *VM, values []Value) (Value, error) {
+func nativeClock(vm *VM, values []Value) (Value, Value) {
 	return Number(float64(time.Now().UnixNano()) / float64(time.Second)), nil
 }
 
-func nativeAssert(vm *VM, values []Value) (Value, error) {
+func nativeAssert(vm *VM, values []Value) (Value, Value) {
 	if len(values) < 1 {
-		return Nihil{}, vm.runtimeError("assert condition required")
+		return nil, String("assert condition required")
 	}
-	if values[0].toBoolean() {
+	if toBoolean(values[0]) {
 		return Nihil{}, nil
 	} else {
-		return Nihil{}, vm.runtimeError("assertion failed")
+		return nil, String("assertion failed")
 	}
 }
 
-func nativeSetPrototype(vm *VM, values []Value) (Value, error) {
+func nativeSetPrototype(vm *VM, values []Value) (Value, Value) {
 	if len(values) < 2 {
-		return Nihil{}, vm.runtimeError("not enough arguments")
+		return nil, String("not enough arguments")
 	}
 	if tbl, ok := values[0].(*Table); ok {
 		if proto, ok := values[1].(Proto); ok {
@@ -164,17 +163,24 @@ func nativeSetPrototype(vm *VM, values []Value) (Value, error) {
 			return tbl, nil
 		}
 	}
-	return Nihil{}, vm.runtimeError("wrong types")
+	return nil, String("wrong types")
 }
 
-func nativeGetPrototype(vm *VM, values []Value) (Value, error) {
+func nativeGetPrototype(vm *VM, values []Value) (Value, Value) {
 	if len(values) < 1 {
-		return Nihil{}, vm.runtimeError("not enough arguments")
+		return nil, String("not enough arguments")
 	}
 	if tbl, ok := values[0].(*Table); ok {
 		return tbl.Proto, nil
 	}
 	return Nihil{}, nil
+}
+
+func nativeError(vm *VM, values []Value) (Value, Value) {
+	if len(values) < 1 {
+		return nil, Nihil{}
+	}
+	return nil, values[0]
 }
 
 func (v Nihil) String() string     { return nihilLiteral }
@@ -186,23 +192,40 @@ func (v *Function) String() string { return fmt.Sprintf("<fn %s>", v.Name) }
 func (v *Closure) String() string  { return v.fn.String() }
 func (v Native) String() string    { return "<native fn>" }
 
-func (v Nihil) toString() String     { return String(v.String()) }
-func (v Boolean) toString() String   { return String(v.String()) }
-func (v Number) toString() String    { return String(v.String()) }
-func (v String) toString() String    { return String(v.String()) }
-func (v *Table) toString() String    { return "<table>" }
-func (v *Function) toString() String { return String(v.String()) }
-func (v *Closure) toString() String  { return String(v.String()) }
-func (v Native) toString() String    { return String(v.String()) }
+func (v Nihil) valueMark()     {}
+func (v Boolean) valueMark()   {}
+func (v Number) valueMark()    {}
+func (v String) valueMark()    {}
+func (v *Table) valueMark()    {}
+func (v *Function) valueMark() {}
+func (v *Closure) valueMark()  {}
+func (v Native) valueMark()    {}
 
-func (v Nihil) toBoolean() Boolean     { return false }
-func (v Boolean) toBoolean() Boolean   { return v }
-func (v Number) toBoolean() Boolean    { return true }
-func (v String) toBoolean() Boolean    { return true }
-func (v *Table) toBoolean() Boolean    { return true }
-func (v *Function) toBoolean() Boolean { return true }
-func (v *Closure) toBoolean() Boolean  { return true }
-func (v Native) toBoolean() Boolean    { return true }
+func toString(v Value) String {
+	switch v := v.(type) {
+	case *Table:
+		return "<table>"
+	case *Function, *Closure, Native:
+		return "<function>"
+	default:
+		return String(v.String())
+	}
+}
+
+func sprintString(format string, a ...any) String {
+	return String(fmt.Sprintf(format, a...))
+}
+
+func toBoolean(v Value) Boolean {
+	switch v := v.(type) {
+	case Nihil:
+		return false
+	case Boolean:
+		return v
+	default:
+		return true
+	}
+}
 
 func isNihil(v Value) bool {
 	_, ok := v.(Nihil)

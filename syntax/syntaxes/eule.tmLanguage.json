@@ -60,7 +60,7 @@
       "patterns": [
         {
           "name": "keyword.control.eule",
-          "match": "\\b(if|unless|else|while|until|do|for|foreach|in|switch|case|default|break|continue|return|then)\\b"
+          "match": "\\b(if|unless|else|while|until|do|for|foreach|in|switch|case|default|break|continue|return|then|try)\\b"
         },
         {
           "name": "keyword.operator.eule",

@@ -15,7 +15,7 @@ type compiler struct {
 	*loop
 	enclosing *compiler
 	scope     int
-	prefix    []bool
+	prefix    []bool // limit 8?
 }
 
 func newCompiler(source []byte) *compiler {
@@ -474,6 +474,8 @@ func (c *compiler) nud() parseFn {
 	case tokenPlus, tokenMinus, tokenBang, tokenTypeOf,
 		tokenPlusPlus, tokenMinusMinus, tokenNot:
 		return c.parsePrefix
+	case tokenTry:
+		return c.parseTry
 	default:
 		return nil
 	}
@@ -637,6 +639,7 @@ func (c *compiler) function(name string) bool {
 
 	if fc.match(tokenLeftParen) {
 		fc.parameterList()
+		fc.ignoreNewLine()
 	}
 
 	isArrow := false
@@ -684,6 +687,13 @@ func (c *compiler) parsePrefix(canAssign bool) {
 	default:
 		panic(unreachable)
 	}
+}
+
+func (c *compiler) parseTry(canAssign bool) {
+	catchJump := c.emitJump(opOpenTry)
+	c.precedence(precUn)
+	c.emit(opCloseTry)
+	c.patchJump(catchJump)
 }
 
 func (c *compiler) led() parseFn {
@@ -921,7 +931,7 @@ func (c *compiler) defineVariable(nameIndex uint8) {
 	if c.scope == 0 {
 		c.emit(opDefineGlobal, nameIndex)
 	} else {
-		c.markLastInitialized()
+		c.initLastLocal()
 	}
 }
 
@@ -967,7 +977,7 @@ func (c *compiler) addUpval(index int, isLocal bool) int {
 	return len(c.fn.Upvals) - 1
 }
 
-func (c *compiler) markLastInitialized() {
+func (c *compiler) initLastLocal() {
 	c.locals[len(c.locals)-1].isInitialized = true
 }
 

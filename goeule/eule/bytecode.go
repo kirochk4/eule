@@ -7,6 +7,8 @@ const (
 	opDup
 	opDupTwo
 	opSwap
+	opOpenTry
+	opCloseTry
 
 	opNihil
 	opFalse
@@ -75,7 +77,7 @@ func printBytecode(f *Function) {
 	printFunctionCode(f)
 	for _, c := range f.Constants {
 		if f, ok := c.(*Function); ok {
-			printFunctionCode(f)
+			printBytecode(f)
 		}
 	}
 }
@@ -103,7 +105,7 @@ func printInstruction(f *Function, offset int) int {
 		opTypeOf, opReturn, opStoreTemp, opLoadTemp, opAddTableKey, opStoreKey,
 		opLoadKey, opCloseUpvalue, opClosure, opMod,
 		opOr, opXor, opAnd, opRev, opAddTableSpread, opAddArrayElement,
-		opAddArraySpread, opArray:
+		opAddArraySpread, opArray, opCloseTry:
 		return simpleInstruction(f, offset)
 	case opConstant, opDefineGlobal, opStoreGlobal,
 		opLoadGlobal:
@@ -111,7 +113,7 @@ func printInstruction(f *Function, offset int) int {
 	case opSmallInteger, opCall, opStoreLocal, opLoadLocal, opLoadUpvalue,
 		opStoreUpvalue, opCallSpread:
 		return byteInstruction(f, offset)
-	case opJump, opJumpIfFalse, opJumpIfDone, opJumpBack:
+	case opJump, opJumpIfFalse, opJumpIfDone, opJumpBack, opOpenTry:
 		sign := 1
 		if op == opJumpBack {
 			sign = -1
@@ -156,10 +158,12 @@ func jumpInstruction(f *Function, offset int, sign int) int {
 }
 
 var opNames = [...]string{
-	opPop:    "pop",
-	opDup:    "dup",
-	opDupTwo: "dup_two",
-	opSwap:   "swap",
+	opPop:      "pop",
+	opDup:      "dup",
+	opDupTwo:   "dup_two",
+	opSwap:     "swap",
+	opOpenTry:  "open_try",
+	opCloseTry: "close_try",
 
 	opNihil: "nihil",
 	opFalse: "false",

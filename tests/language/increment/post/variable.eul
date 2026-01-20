@@ -1,3 +1,0 @@
-let a = 0
-print(a++) # out: 0
-print(a) # out: 1

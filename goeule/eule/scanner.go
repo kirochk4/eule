@@ -325,6 +325,7 @@ var keywords = map[string]tokenType{
 	"foreach": tokenForEach,
 	"in":      tokenIn,
 	"then":    tokenThen,
+	"try":     tokenTry,
 
 	"typeof": tokenTypeOf,
 }

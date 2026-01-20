@@ -82,6 +82,7 @@ const (
 	tokenForEach  tokenType = "foreach"
 	tokenIn       tokenType = "in"
 	tokenThen     tokenType = "then"
+	tokenTry      tokenType = "try"
 
 	tokenTypeOf tokenType = "typeof"
 

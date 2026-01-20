@@ -12,7 +12,7 @@ const Version = "0.0.0"
 const (
 	debugPrintTokens    = false
 	debugPrintBytecode  = false
-	debugTraceExecution = false
+	debugTraceExecution = true
 )
 
 const (
@@ -38,6 +38,7 @@ const (
 	magicLength String = "length"
 	magicArray  String = "__array"
 	magicValue  String = "value"
+	magicError  String = "error"
 	magicDone   String = "done"
 
 	tableCapacity = 32
@@ -111,7 +112,7 @@ func formatTable(tbl *Table) string {
 	str.WriteString("{ ")
 	i := 0
 	for k, v := range tbl.Pairs {
-		str.WriteString(fmt.Sprintf("\"%s\": %s", k, v.toString()))
+		str.WriteString(fmt.Sprintf("\"%s\": %s", k, toString(v)))
 		if i != len(tbl.Pairs)-1 {
 			str.WriteString(", ")
 		}

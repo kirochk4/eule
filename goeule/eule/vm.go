@@ -23,6 +23,8 @@ var (
 	ErrInterpretCompileError = errors.New("compile error")
 )
 
+type throwError error
+
 type callFrame struct {
 	fn     *Function
 	cursor int
@@ -30,9 +32,10 @@ type callFrame struct {
 	upvals []*Upvalue
 }
 
-type protect struct {
-	cst int
-	st  int
+type tryHandler struct {
+	cst  int
+	st   int
+	rcvr int
 }
 
 func (f *callFrame) readByte() uint8 {
@@ -61,7 +64,7 @@ type VM struct {
 	st         int
 	Global     *Table
 	openUpvals *Upvalue
-	prot       []protect
+	try        []tryHandler
 	arrayProto *Table
 }
 
@@ -77,6 +80,7 @@ func New() *VM {
 	vm.Global.Store(String("assert"), Native(nativeAssert))
 	vm.Global.Store(String("setPrototype"), Native(nativeSetPrototype))
 	vm.Global.Store(String("getPrototype"), Native(nativeGetPrototype))
+	vm.Global.Store(String("error"), Native(nativeError))
 
 	vm.Interpret(include)
 	vm.arrayProto = vm.Global.Load(magicArray).(*Table)
@@ -103,20 +107,42 @@ func (vm *VM) currentFrame() *callFrame {
 	return &vm.callStack[vm.cst-1]
 }
 
-func (vm *VM) run() error {
+func (vm *VM) run() (err error) {
 	frame := vm.currentFrame()
+	throwString := func(format string, a ...any) {
+		if err := vm.throw(&frame, format, a...); err != nil {
+			panic(throwError(err))
+		}
+	}
+	throwValue := func(v Value) {
+		throwString("%v", v)
+	}
+	defer catch(func(e throwError) { err = e })
 
 	for {
 		if debugTraceExecution {
 			printInstruction(frame.fn, frame.cursor)
 			fmt.Print("|: ")
 			for i := 0; i < vm.st; i++ {
-				fmt.Printf("[%v] ", vm.stack[i])
+				fmt.Printf("[%s] ", toString(vm.stack[i]))
 			}
 			fmt.Println()
 		}
 
 		switch op := frame.readByte(); op {
+		case opOpenTry:
+			offset := int(frame.readShort())
+			vm.try = append(vm.try, tryHandler{
+				vm.cst, vm.st,
+				frame.cursor + offset,
+			})
+		case opCloseTry:
+			slicePop(&vm.try)
+			val := vm.pop()
+			r := newTable(2, nil)
+			r.Store(magicValue, val)
+			r.Store(magicError, Boolean(false))
+			vm.push(r)
 		case opPop:
 			vm.pop()
 		case opDup:
@@ -166,7 +192,7 @@ func (vm *VM) run() error {
 					newLength = oldLength + length
 				}
 			default:
-				return vm.runtimeError("attempt to spread %s", typeOf(spr))
+				throwString("attempt to spread %s", typeOf(spr))
 			}
 
 			array.Store(magicLength, newLength)
@@ -212,7 +238,7 @@ func (vm *VM) run() error {
 			case *Table:
 				maps.Copy(table.Pairs, spr.Pairs)
 			default:
-				return vm.runtimeError("attempt to spread %s", typeOf(spr))
+				throwString("attempt to spread %s", typeOf(spr))
 			}
 		case opStoreKey:
 			value := vm.pop()
@@ -220,10 +246,7 @@ func (vm *VM) run() error {
 			object := vm.pop()
 			table, ok := object.(*Table)
 			if !ok {
-				return vm.runtimeError(
-					"attempt to store key in %s",
-					typeOf(object),
-				)
+				throwString("attempt to store key in %s", typeOf(object))
 			}
 			vm.push(table.Store(key, value))
 		case opLoadKey:
@@ -231,10 +254,7 @@ func (vm *VM) run() error {
 			object := vm.pop()
 			table, ok := object.(*Table)
 			if !ok {
-				return vm.runtimeError(
-					"attempt to load key from %s",
-					typeOf(object),
-				)
+				throwString("attempt to load key from %s", typeOf(object))
 			}
 			vm.push(table.Load(key))
 		case opStoreLocal:
@@ -249,13 +269,13 @@ func (vm *VM) run() error {
 		case opStoreGlobal:
 			name := frame.readString()
 			if _, ok := vm.Global.Pairs[name]; !ok {
-				return vm.runtimeError("variable '%s' is undefined", name)
+				throwString("variable '%s' is undefined", name)
 			}
 			vm.Global.Pairs[name] = vm.peek(0)
 		case opLoadGlobal:
 			name := frame.readString()
 			if value, ok := vm.Global.Pairs[name]; !ok {
-				return vm.runtimeError("variable '%s' is undefined", name)
+				throwString("variable '%s' is undefined", name)
 			} else {
 				vm.push(value)
 			}
@@ -271,8 +291,9 @@ func (vm *VM) run() error {
 			} else if num1, num2, ok := assertValues[Number](v1, v2); ok {
 				vm.push(num1 + num2)
 			} else {
-				return vm.runtimeError(
-					"attempt to add %s and %s", typeOf(v1), typeOf(v2),
+				throwString(
+					"attempt to add %s and %s",
+					typeOf(v1), typeOf(v2),
 				)
 			}
 		case opLt, opLe, opSub, opMul, opDiv, opMod:
@@ -281,7 +302,7 @@ func (vm *VM) run() error {
 			if num1, num2, ok := assertValues[Number](v1, v2); ok {
 				vm.push(numOps[op](num1, num2))
 			} else {
-				return vm.runtimeError(
+				throwString(
 					"attempt to %s %s and %s",
 					opNames[op], typeOf(v1), typeOf(v2),
 				)
@@ -322,11 +343,11 @@ func (vm *VM) run() error {
 			}
 			panic(unreachable)
 		case opNot:
-			vm.push(!vm.pop().toBoolean())
+			vm.push(!toBoolean(vm.pop()))
 		case opNeg:
 			v, isNumber := vm.peek(0).(Number)
 			if !isNumber {
-				return vm.runtimeError(
+				throwString(
 					"attempt to %s %s",
 					opNames[op], typeOf(v),
 				)
@@ -336,7 +357,7 @@ func (vm *VM) run() error {
 		case opPos:
 			v, isNumber := vm.peek(0).(Number)
 			if !isNumber {
-				return vm.runtimeError(
+				throwString(
 					"attempt to %s %s",
 					opNames[op], typeOf(v),
 				)
@@ -349,14 +370,14 @@ func (vm *VM) run() error {
 			frame.cursor += int(frame.readShort())
 		case opJumpIfFalse:
 			offset := int(frame.readShort())
-			if !vm.peek(0).toBoolean() {
+			if !toBoolean(vm.peek(0)) {
 				frame.cursor += offset
 			}
 		case opJumpIfDone:
 			offset := int(frame.readShort())
 			obj := vm.pop()
 			if tbl, ok := obj.(*Table); ok {
-				if !tbl.Load(magicDone).toBoolean() {
+				if !toBoolean(tbl.Load(magicDone)) {
 					vm.push(tbl.Load(magicValue))
 					break
 				}
@@ -367,7 +388,7 @@ func (vm *VM) run() error {
 		case opCall:
 			argCount := int(frame.readByte())
 			if err := vm.callValue(vm.peek(argCount), argCount); err != nil {
-				return err
+				throwValue(err)
 			}
 			frame = vm.currentFrame()
 		case opCallSpread:
@@ -385,11 +406,11 @@ func (vm *VM) run() error {
 					}
 				}
 			default:
-				return vm.runtimeError("attempt to spread %s", typeOf(spr))
+				throwString("attempt to spread %s", typeOf(spr))
 			}
 
 			if err := vm.callValue(vm.peek(argCount), argCount); err != nil {
-				return err
+				throwValue(err)
 			}
 			frame = vm.currentFrame()
 
@@ -400,6 +421,7 @@ func (vm *VM) run() error {
 			vm.push(result)
 			vm.cst--
 			if vm.cst == 0 {
+				vm.pop()
 				return nil
 			}
 			frame = vm.currentFrame()
@@ -441,7 +463,7 @@ func (vm *VM) closeUpvalues(locOfLast int) {
 	}
 }
 
-func (vm *VM) callValue(value Value, argCount int) error {
+func (vm *VM) callValue(value Value, argCount int) Value {
 	switch callee := value.(type) {
 	case *Closure:
 		return vm.callFunction(callee.fn, argCount, callee.upvals)
@@ -450,7 +472,7 @@ func (vm *VM) callValue(value Value, argCount int) error {
 	case Native:
 		return vm.callNative(callee, argCount)
 	default:
-		return vm.runtimeError(
+		return sprintString(
 			"%s is not callable", typeOf(value),
 		)
 	}
@@ -488,9 +510,9 @@ func (vm *VM) callFunction(
 	fn *Function,
 	argCount int,
 	upvals []*Upvalue,
-) error {
+) Value {
 	if vm.cst == framesMax {
-		return vm.runtimeError("stack overflow")
+		return String("stack overflow")
 	}
 	vm.callStack[vm.cst] = callFrame{fn, 0, vm.st - argCount, upvals}
 	vm.cst++
@@ -498,7 +520,7 @@ func (vm *VM) callFunction(
 	return nil
 }
 
-func (vm *VM) callNative(fn Native, argCount int) error {
+func (vm *VM) callNative(fn Native, argCount int) Value {
 	args := vm.stack[vm.st-argCount : vm.st]
 	vm.st = vm.st - argCount - 1
 	if val, err := fn(vm, args); err != nil {
@@ -523,21 +545,31 @@ func (vm *VM) peek(distance int) Value {
 	return vm.stack[vm.st-1-distance]
 }
 
-func (vm *VM) unwind(errValue Value) bool {
-	if len(vm.prot) != 0 {
-		prot := slicePop(&vm.prot)
-		vm.st, vm.cst = prot.st, prot.cst
-		vm.push(errValue)
+func (vm *VM) throw(frame **callFrame, format string, a ...any) error {
+	if vm.unwind(frame) {
+		r := newTable(2, nil)
+		r.Store(magicValue, String(fmt.Sprintf(format, a...)))
+		r.Store(magicError, Boolean(true))
+		vm.push(r)
+		return nil
+	}
+
+	return vm.runtimeError(format, a...)
+}
+
+func (vm *VM) unwind(frame **callFrame) bool {
+	if len(vm.try) != 0 {
+		try := slicePop(&vm.try)
+		vm.st, vm.cst = try.st, try.cst
+		vm.closeUpvalues(try.st)
+		*frame = vm.currentFrame()
+		(*frame).cursor = try.rcvr
 		return true
 	}
 	return false
 }
 
 func (vm *VM) runtimeError(format string, a ...any) error {
-	if vm.unwind(String(fmt.Sprintf(format, a...))) {
-		return nil
-	}
-
 	fmt.Fprint(os.Stderr, "runtime error: ")
 	fmt.Fprintf(os.Stderr, format+"\n", a...)
 

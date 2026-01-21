@@ -97,7 +97,8 @@ func NewFunction(name string) *Function {
 	return &Function{Name: name}
 }
 
-type Native func(vm *VM, values []Value) (Value, Value)
+// type Native func(vm *VM, argc int)
+type /*Simple*/Native func(vm *VM, values []Value) (Value, Value)
 
 type Closure struct {
 	fn     *Function
@@ -129,7 +130,7 @@ func (u *Upvalue) Load() Value {
 
 func nativePrint(vm *VM, values []Value) (Value, Value) {
 	for i, value := range values {
-		fmt.Printf("%s", value)
+		fmt.Printf("%s", toPrint(value))
 		if i != len(values)-1 {
 			fmt.Print(" ")
 		}
@@ -187,7 +188,7 @@ func (v Nihil) String() string     { return nihilLiteral }
 func (v Boolean) String() string   { return strconv.FormatBool(bool(v)) }
 func (v Number) String() string    { return formatNumber(v) }
 func (v String) String() string    { return string(v) }
-func (v *Table) String() string    { return formatTable(v) }
+func (v *Table) String() string    { return "<table>" }
 func (v *Function) String() string { return fmt.Sprintf("<fn %s>", v.Name) }
 func (v *Closure) String() string  { return v.fn.String() }
 func (v Native) String() string    { return "<native fn>" }
@@ -201,10 +202,17 @@ func (v *Function) valueMark() {}
 func (v *Closure) valueMark()  {}
 func (v Native) valueMark()    {}
 
-func toString(v Value) String {
+func toPrint(v Value) string {
 	switch v := v.(type) {
 	case *Table:
-		return "<table>"
+		return formatTable(v)
+	default:
+		return v.String()
+	}
+}
+
+func toString(v Value) String {
+	switch v := v.(type) {
 	case *Function, *Closure, Native:
 		return "<function>"
 	default:
@@ -225,6 +233,18 @@ func toBoolean(v Value) Boolean {
 	default:
 		return true
 	}
+}
+
+func toInteger(v String) (int, bool) {
+	var i int = 0
+	for _, r := range v {
+		if '0' <= r && r <= '9' {
+			i = i*10 + int(r-'0')
+		} else {
+			return 0, false
+		}
+	}
+	return i, true
 }
 
 func isNihil(v Value) bool {

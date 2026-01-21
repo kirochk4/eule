@@ -124,7 +124,7 @@ func (vm *VM) run() (err error) {
 			printInstruction(frame.fn, frame.cursor)
 			fmt.Print("|: ")
 			for i := 0; i < vm.st; i++ {
-				fmt.Printf("[%s] ", toString(vm.stack[i]))
+				fmt.Printf("[%v] ", vm.stack[i])
 			}
 			fmt.Println()
 		}

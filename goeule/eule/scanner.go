@@ -273,21 +273,22 @@ var duo = map[[2]byte]tokenType{
 	{'!', '='}: tokenBangEqual,
 	{'<', '='}: tokenLeftAngleEqual,
 	{'>', '='}: tokenRightAngleEqual,
-
+	
 	{'+', '+'}: tokenPlusPlus,
 	{'-', '-'}: tokenMinusMinus,
-
+	
 	{'-', '>'}: tokenMinusRightAngle,
 	{'=', '>'}: tokenEqualRightAngle,
-
+	
 	{'+', '='}: tokenPlusEqual,
 	{'-', '='}: tokenMinusEqual,
 	{'*', '='}: tokenStarEqual,
 	{'/', '='}: tokenSlashEqual,
 	{'%', '='}: tokenPercentEqual,
-
+	
 	{'|', '|'}: tokenPipePipe,
 	{'&', '&'}: tokenAmperAmper,
+	{':', ':'}: tokenColonColon,
 }
 
 var trio = map[[3]byte]tokenType{

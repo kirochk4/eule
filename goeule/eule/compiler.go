@@ -21,7 +21,7 @@ type compiler struct {
 func newCompiler(source []byte) *compiler {
 	return &compiler{
 		tokenReader: newTokenReader(source),
-		fn:          NewFunction("@"),
+		fn:          NewFunction("@script"),
 		fnType:      fnTypeScript,
 		loop:        nil,
 		enclosing:   nil,
@@ -271,7 +271,7 @@ func (c *compiler) forEachStatement(label string) {
 	c.beginScope()
 
 	c.consume(tokenLeftParen)
-	c.addLocal("@")
+	c.addLocal("@iterator")
 	c.defineVariable(c.declareVariable())
 
 	c.consume(tokenIn)
@@ -714,12 +714,14 @@ func (c *compiler) led() parseFn {
 		return c.parseThen
 	case tokenLeftParen:
 		return c.parseCall
+	case tokenColonColon:
+		return c.parseMethodCall
 	case tokenLeftBracket:
 		return c.parseKey
 	case tokenDot:
 		return c.parseDot
 	case tokenMinusRightAngle:
-		return c.parseArrow
+		return c.parseAccessor
 	default:
 		panic(unreachable)
 	}
@@ -821,24 +823,28 @@ func (c *compiler) parseDot(canAssign bool) {
 	)
 }
 
-func (c *compiler) parseArrow(canAssign bool) {
+func (c *compiler) parseAccessor(canAssign bool) {
 	c.emit(opDup)
 	c.consumeIdentifierConstant()
 	c.emit(opLoadKey, opSwap)
-	if c.match(tokenLeftParen) {
-		argCount, spread := c.argumentList()
-		if spread {
-			c.emit(opCallSpread, argCount+1)
-		} else {
-			c.emit(opCall, argCount+1)
-		}
+	c.assign(
+		func() { c.emit(opCall, 2) },
+		func() { c.emit(opCall, 1) },
+		func() { c.emit(opDupTwo, opCall, 1) },
+		canAssign,
+	)
+}
+
+func (c *compiler) parseMethodCall(canAssign bool) {
+	c.emit(opDup)
+	c.consumeIdentifierConstant()
+	c.emit(opLoadKey, opSwap)
+	c.consume(tokenLeftParen)
+	argCount, spread := c.argumentList()
+	if spread {
+		c.emit(opCallSpread, argCount+1)
 	} else {
-		c.assign(
-			func() { c.emit(opCall, 2) },
-			func() { c.emit(opCall, 1) },
-			func() { c.emit(opDupTwo, opCall, 1) },
-			canAssign,
-		)
+		c.emit(opCall, argCount+1)
 	}
 }
 
@@ -1155,7 +1161,7 @@ const (
 	precTerm              // + -
 	precFact              // * / %
 	precUn                // ! not + - ~ ++ -- typeof
-	precCall              // . () [] -> ++ --
+	precCall              // . () [] -> :: ++ --
 	precHighest
 )
 
@@ -1190,6 +1196,7 @@ var precedences = map[tokenType]precedence{
 	tokenLeftBracket:     precCall,
 	tokenDot:             precCall,
 	tokenMinusRightAngle: precCall,
+	tokenColonColon:      precCall,
 }
 
 /* == token reader ========================================================== */

@@ -12,7 +12,7 @@ const Version = "0.0.0"
 const (
 	debugPrintTokens    = false
 	debugPrintBytecode  = false
-	debugTraceExecution = true
+	debugTraceExecution = false
 )
 
 const (
@@ -100,7 +100,7 @@ func formatNumber(num Number) string {
 			return "-inf"
 		}
 	} else {
-		return strconv.FormatFloat(f, 'g', 8, 64)
+		return strconv.FormatFloat(f, 'g', -1, 64)
 	}
 }
 

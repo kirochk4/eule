@@ -1,9 +1,9 @@
 {
-  let foo = "closure"
-  let f() {
+  var foo = "closure"
+  var f() {
     {
       print(foo) # out: closure
-      let foo = "shadow"
+      var foo = "shadow"
       print(foo) # out: shadow
     }
     print(foo) # out: closure

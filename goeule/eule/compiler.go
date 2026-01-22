@@ -92,7 +92,7 @@ func (c *compiler) statement() {
 		c.continueStatement()
 	case c.match(tokenReturn):
 		c.returnStatement()
-	case c.check(tokenIdentifier) && c.checkNext(tokenColon):
+	case c.check(tokenName) && c.checkNext(tokenColon):
 		c.labelStatement()
 	default:
 		c.expressionStatement()
@@ -297,7 +297,7 @@ func (c *compiler) forEachStatement(label string) {
 
 func (c *compiler) breakStatement() {
 	if !c.matchSemicolon() {
-		c.consume(tokenIdentifier)
+		c.consume(tokenName)
 		label := c.previous.literal
 		loop := c.loop
 		for loop != nil {
@@ -327,7 +327,7 @@ end:
 
 func (c *compiler) continueStatement() {
 	if !c.matchSemicolon() {
-		c.consume(tokenIdentifier)
+		c.consume(tokenName)
 		label := c.previous.literal
 		loop := c.loop
 		for loop != nil {
@@ -421,7 +421,6 @@ func (c *compiler) precedence(prec precedence) {
 		return
 	}
 
-	canPreInc := prec <= precUn
 	canAssign := prec <= precAssign
 	nudFn(canAssign)
 
@@ -431,9 +430,7 @@ func (c *compiler) precedence(prec precedence) {
 		ledFn(canAssign)
 	}
 
-	if canPreInc && precedences[c.current.tokenType] > precUn {
-		c.errorAtPrevious("invalid preincrement")
-	} else if mapHas(incTokens, c.current.tokenType) {
+	if mapHas(incTokens, c.current.tokenType) {
 		c.errorAtPrevious("invalid postincrement")
 	} else if canAssign && mapHas(assignTokens, c.current.tokenType) {
 		c.errorAtPrevious("invalid assignment")
@@ -457,7 +454,7 @@ func (c *compiler) nud() parseFn {
 	switch c.previous.tokenType {
 	case tokenLeftParen:
 		return c.parseGroup
-	case tokenIdentifier:
+	case tokenName:
 		return c.parseVariable
 	case tokenNihil, tokenFalse, tokenTrue:
 		return c.parseLiteral
@@ -476,6 +473,8 @@ func (c *compiler) nud() parseFn {
 		return c.parsePrefix
 	case tokenTry:
 		return c.parseTry
+	case tokenFormat:
+		return c.parseFormat
 	default:
 		return nil
 	}
@@ -694,6 +693,20 @@ func (c *compiler) parseTry(canAssign bool) {
 	c.precedence(precUn)
 	c.emit(opCloseTry)
 	c.patchJump(catchJump)
+}
+
+func (c *compiler) parseFormat(canAssign bool) {
+	for {
+		c.makeConstant(String(c.previous.literal[1:]))
+		c.expression()
+		c.emit(opToString, opAdd)
+		if !c.match(tokenFormat) {
+			break
+		}
+	}
+	c.consume(tokenString)
+	c.makeConstant(String(c.previous.literal[:len(c.previous.literal)-1]))
+	c.emit(opAdd)
 }
 
 func (c *compiler) led() parseFn {
@@ -924,7 +937,7 @@ func (c *compiler) assign(set, get, getNoPop func(), canAssign bool) {
 }
 
 func (c *compiler) declareVariable() uint8 {
-	c.consume(tokenIdentifier)
+	c.consume(tokenName)
 	if c.scope == 0 {
 		return c.makeConstant(String(c.previous.literal))
 	} else {
@@ -1022,7 +1035,7 @@ func (c *compiler) emitConstant(value Value) {
 }
 
 func (c *compiler) consumeIdentifierConstant() {
-	c.consume(tokenIdentifier)
+	c.consume(tokenName)
 	c.emitConstant(String(c.previous.literal))
 }
 
@@ -1160,7 +1173,7 @@ const (
 	precShift             // << >> >>>
 	precTerm              // + -
 	precFact              // * / %
-	precUn                // ! not + - ~ ++ -- typeof
+	precUn                // ! not + - ~ ++ -- typeof try
 	precCall              // . () [] -> :: ++ --
 	precHighest
 )

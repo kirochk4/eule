@@ -1,6 +1,6 @@
 {
-  let local = "local"
-  let f() {
+  var local = "local"
+  var f() {
     print(local) # out: local
   }
   f()

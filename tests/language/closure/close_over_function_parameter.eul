@@ -1,7 +1,7 @@
-let f
+var f
 
-let foo(param) {
-  let f_() {
+var foo(param) {
+  var f_() {
     print(param)
   }
   f = f_

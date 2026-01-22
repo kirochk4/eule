@@ -2,7 +2,7 @@ package eule
 
 import "fmt"
 
-const eofByte = 0
+const eofByte = nul
 
 type scanner struct {
 	source []byte
@@ -10,6 +10,7 @@ type scanner struct {
 	start  int
 	line   int
 	nl     bool
+	format int
 }
 
 func newScanner(source []byte) scanner {
@@ -120,7 +121,7 @@ func (s *scanner) identifierType() tokenType {
 	if t, ok := keywords[s.literal()]; ok {
 		return t
 	}
-	return tokenIdentifier
+	return tokenName
 }
 
 func (s *scanner) identifier() token {
@@ -159,12 +160,16 @@ func (s *scanner) number() token {
 }
 
 func (s *scanner) string() token {
-	char := s.advance()
-	for char != '"' {
-		if char == '\n' || s.isAtEnd() {
+	cur := s.advance()
+	for cur != '"' {
+		if cur == '\n' || s.isAtEnd() {
 			return s.errorToken("unfinished string")
 		}
-		char = s.advance()
+		if cur == '%' {
+			s.format++
+			return s.makeToken(tokenFormat)
+		}
+		cur = s.advance()
 	}
 	return s.makeToken(tokenString)
 }
@@ -231,7 +236,7 @@ var insertNewLineAfter = map[tokenType]empty{
 	tokenRightBracket: {},
 	tokenPlusPlus:     {},
 	tokenMinusMinus:   {},
-	tokenIdentifier:   {},
+	tokenName:         {},
 	tokenNumber:       {},
 	tokenString:       {},
 	tokenNihil:        {},
@@ -273,19 +278,19 @@ var duo = map[[2]byte]tokenType{
 	{'!', '='}: tokenBangEqual,
 	{'<', '='}: tokenLeftAngleEqual,
 	{'>', '='}: tokenRightAngleEqual,
-	
+
 	{'+', '+'}: tokenPlusPlus,
 	{'-', '-'}: tokenMinusMinus,
-	
+
 	{'-', '>'}: tokenMinusRightAngle,
 	{'=', '>'}: tokenEqualRightAngle,
-	
+
 	{'+', '='}: tokenPlusEqual,
 	{'-', '='}: tokenMinusEqual,
 	{'*', '='}: tokenStarEqual,
 	{'/', '='}: tokenSlashEqual,
 	{'%', '='}: tokenPercentEqual,
-	
+
 	{'|', '|'}: tokenPipePipe,
 	{'&', '&'}: tokenAmperAmper,
 	{':', ':'}: tokenColonColon,
@@ -315,9 +320,10 @@ var keywords = map[string]tokenType{
 	"continue": tokenContinue,
 	"return":   tokenReturn,
 
-	"switch":  tokenSwitch,
-	"case":    tokenCase,
-	"default": tokenDefault,
+	// "switch":  tokenSwitch,
+	// "case":    tokenCase,
+	// "default": tokenDefault,
+
 	"and":     tokenAnd,
 	"or":      tokenOr,
 	"not":     tokenNot,

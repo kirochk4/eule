@@ -97,8 +97,12 @@ func NewFunction(name string) *Function {
 	return &Function{Name: name}
 }
 
-// type Native func(vm *VM, argc int)
-type /*Simple*/Native func(vm *VM, values []Value) (Value, Value)
+type CallContext struct {
+	VM   *VM
+	Args []Value
+}
+
+type Native func(vm *VM, values []Value) (Value, Value)
 
 type Closure struct {
 	fn     *Function

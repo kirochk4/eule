@@ -1,4 +1,4 @@
-let a = "before"
-let c = a = "after"
+var a = "before"
+var c = a = "after"
 assert(a == "after")
 assert(c == "after")

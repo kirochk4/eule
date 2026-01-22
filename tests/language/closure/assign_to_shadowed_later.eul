@@ -1,11 +1,11 @@
-let a = "global"
+var a = "global"
 
 {
-  let assign() {
+  var assign() {
     a = "assigned"
   }
 
-  let a = "inner"
+  var a = "inner"
   assign()
   print(a) # out: inner
 }

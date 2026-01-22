@@ -54,9 +54,10 @@ const (
 
 	tokenDotDotDot tokenType = "..."
 
-	tokenIdentifier tokenType = "identifier"
-	tokenNumber     tokenType = "number"
-	tokenString     tokenType = "string"
+	tokenName   tokenType = "name"
+	tokenNumber tokenType = "number"
+	tokenString tokenType = "string"
+	tokenFormat tokenType = "format"
 
 	tokenNihil    tokenType = "nihil"
 	tokenVariable tokenType = "variable"

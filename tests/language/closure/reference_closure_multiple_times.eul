@@ -1,8 +1,8 @@
-let f
+var f
 
 {
-  let a = "a"
-  let f_() {
+  var a = "a"
+  var f_() {
     print(a)
     print(a)
   }

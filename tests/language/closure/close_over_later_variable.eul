@@ -3,10 +3,10 @@
 # would crash because it walked to the end of the upvalue list (correct), but
 # then didn't handle not finding the variable.
 
-let f() {
-  let a = "a"
-  let b = "b"
-  let g() {
+var f() {
+  var a = "a"
+  var b = "b"
+  var g() {
     print(b) # out: b
     print(a) # out: a
   }

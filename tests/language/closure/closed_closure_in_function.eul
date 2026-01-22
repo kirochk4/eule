@@ -1,8 +1,8 @@
-let f
+var f
 
 {
-  let local = "local"
-  let f_() {
+  var local = "local"
+  var f_() {
     print(local)
   }
   f = f_

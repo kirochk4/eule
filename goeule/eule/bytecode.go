@@ -10,6 +10,8 @@ const (
 	opOpenTry
 	opCloseTry
 
+	opToString
+
 	opNihil
 	opFalse
 	opTrue
@@ -105,7 +107,7 @@ func printInstruction(f *Function, offset int) int {
 		opTypeOf, opReturn, opStoreTemp, opLoadTemp, opAddTableKey, opStoreKey,
 		opLoadKey, opCloseUpvalue, opClosure, opMod,
 		opOr, opXor, opAnd, opRev, opAddTableSpread, opAddArrayElement,
-		opAddArraySpread, opArray, opCloseTry:
+		opAddArraySpread, opArray, opCloseTry, opToString:
 		return simpleInstruction(f, offset)
 	case opConstant, opDefineGlobal, opStoreGlobal,
 		opLoadGlobal:
@@ -164,6 +166,8 @@ var opNames = [...]string{
 	opSwap:     "swap",
 	opOpenTry:  "open_try",
 	opCloseTry: "close_try",
+
+	opToString: "to_string",
 
 	opNihil: "nihil",
 	opFalse: "false",

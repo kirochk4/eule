@@ -130,6 +130,8 @@ func (vm *VM) run() (err error) {
 		}
 
 		switch op := frame.readByte(); op {
+		case opToString:
+			vm.push(toString(vm.pop()))
 		case opOpenTry:
 			offset := int(frame.readShort())
 			vm.try = append(vm.try, tryHandler{

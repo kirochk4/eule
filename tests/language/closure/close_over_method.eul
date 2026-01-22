@@ -1,13 +1,13 @@
-let f
+var f
 
-let foo = {
+var foo = {
   .method(self, param) {
-    let f_() {
+    var f_() {
       print(param)
     }
     f = f_
   },
 }
 
-foo->method("param")
+foo::method("param")
 f() # out: param

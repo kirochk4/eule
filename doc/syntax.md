@@ -10,20 +10,20 @@
 #### function
 
 ```eul
-let name() {}
-let name {}
-let name() => nil
-let name => nil
+var name() {}
+var name {}
+var name() => void
+var name => void
 
-def() {}
-def {}
-def() => nil
-def => nil
+func() {}
+func {}
+func() => void
+func => void
 
-let tbl = {
+var tbl = {
   .prop() {},
   .prop {},
-  .prop() => nil,
-  .prop => nil,
+  .prop() => void,
+  .prop => void,
 }
 ```

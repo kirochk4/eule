@@ -20,6 +20,8 @@ const (
 )
 
 const (
+	nul byte = 0
+
 	uint8Max  uint8  = math.MaxUint8
 	uint16Max uint16 = math.MaxUint16
 
@@ -27,9 +29,9 @@ const (
 
 	unreachable = "unreachable"
 
-	nihilLiteral    = "nil"
-	variableLiteral = "let"
-	functionLiteral = "def"
+	nihilLiteral    = "void"
+	variableLiteral = "var"
+	functionLiteral = "func"
 
 	fnMaxParams = 16 // must be < 256
 

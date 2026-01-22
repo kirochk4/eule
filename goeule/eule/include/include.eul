@@ -1,30 +1,30 @@
-let __array = {
+var __array = {
   .push(self, v) => self[self.length++] = v,
   .pop(self) => self[--self.length],
 
   .iterator(self) {
-    let i = 0
-    return def => i < self.length then
+    var i = 0
+    return func => i < self.length then
       { .value = self[i++] } else
       { .done = true }
   },
-  .drain(self) => def => self.length > 0 then
+  .drain(self) => func => self.length > 0 then
     { .value = self->pop() } else 
     { .done = true },
 
   .forEach(self, f) {
-    let p
-    for (let i = 0; i < self.length; i++) {
-      let e = self[i]
+    var p
+    for (var i = 0; i < self.length; i++) {
+      var e = self[i]
       f(e, i, p)
       p = e
     }
     return self
   },
   .filter(self, f) {
-    let a = [], p
-    for (let i = 0; i < self.length; i++) {
-      let e = self[i]
+    var a = [], p
+    for (var i = 0; i < self.length; i++) {
+      var e = self[i]
       if (f(e, i, p))
         a->push(e)
       p = e
@@ -32,9 +32,9 @@ let __array = {
     return a
   },
   .map(self, f) {
-    let p
-    for (let i = 0; i < self.length; i++) {
-      let e = self[i]
+    var p
+    for (var i = 0; i < self.length; i++) {
+      var e = self[i]
       self[i] = f(e, i, p)
       p = e
     }

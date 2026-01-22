@@ -64,11 +64,11 @@
         },
         {
           "name": "keyword.operator.eule",
-          "match": "\\b(let|def|typeof|and|or|not)\\b"
+          "match": "\\b(var|func|typeof|and|or|not)\\b"
         },
         {
           "name": "constant.language.eule",
-          "match": "\\b(false|true|nil)\\b"
+          "match": "\\b(false|true|void)\\b"
         }
       ]
     },
